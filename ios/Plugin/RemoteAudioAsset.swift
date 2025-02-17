@@ -4,6 +4,7 @@ public class RemoteAudioAsset: AudioAsset {
     var playerItems: [AVPlayerItem] = []
     var players: [AVPlayer] = []
     var playerObservers: [NSKeyValueObservation] = []
+    var duration: TimeInterval = 0
 
     override init(owner: NativeAudio, withAssetId assetId: String, withPath path: String!, withChannels channels: Int!, withVolume volume: Float!, withFadeDelay delay: Float!) {
         super.init(owner: owner, withAssetId: assetId, withPath: path, withChannels: channels, withVolume: volume, withFadeDelay: delay)
@@ -15,6 +16,14 @@ public class RemoteAudioAsset: AudioAsset {
                 player.volume = volume
                 self.playerItems.append(playerItem)
                 self.players.append(player)
+
+                // Add observer for duration
+                let durationObserver = playerItem.observe(\.status) { [weak self] item, _ in
+                    if item.status == .readyToPlay {
+                        self?.duration = item.duration.seconds
+                    }
+                }
+                self.playerObservers.append(durationObserver)
 
                 // Add observer for playback finished
                 let observer = player.observe(\.timeControlStatus) { [weak self] player, _ in
@@ -114,5 +123,9 @@ public class RemoteAudioAsset: AudioAsset {
         guard !players.isEmpty else { return 0 }
         let player = players[playIndex]
         return player.currentTime().seconds
+    }
+
+    override func getDuration() -> TimeInterval {
+        return duration
     }
 }

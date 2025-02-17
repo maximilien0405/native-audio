@@ -481,7 +481,7 @@ Check if an audio file is playing
 ### addListener('complete', ...)
 
 ```typescript
-addListener(eventName: "complete", listenerFunc: CompletedListener) => Promise<PluginListenerHandle>
+addListener(eventName: 'complete', listenerFunc: CompletedListener) => Promise<PluginListenerHandle>
 ```
 
 Listen for complete event
@@ -495,6 +495,19 @@ Listen for complete event
 
 **Since:** 5.0.0
 return {@link CompletedEvent}
+
+--------------------
+
+
+### clearCache()
+
+```typescript
+clearCache() => Promise<void>
+```
+
+Clear the audio cache for remote audio files
+
+**Since:** 6.5.0
 
 --------------------
 

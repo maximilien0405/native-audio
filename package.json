@@ -2,7 +2,8 @@
   "name": "@capgo/native-audio",
   "version": "7.1.8",
   "description": "A native plugin for native audio engine",
-  "main": "dist/plugin.js",
+  "license": "MIT",
+  "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
   "unpkg": "dist/plugin.js",
@@ -13,11 +14,20 @@
     "ios/Plugin/",
     "CapgoNativeAudio.podspec"
   ],
+  "author": "Martin Donadieu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cap-go/native-audio.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Cap-go/native-audio/issues"
+  },
   "keywords": [
     "capacitor",
     "plugin",
     "audio",
     "media",
+    "capgo",
     "native"
   ],
   "scripts": {
@@ -28,7 +38,7 @@
     "lint": "npm run eslint && npm run prettier -- --check && npm run swiftlint -- lint",
     "fmt": "npm run eslint -- --fix && npm run prettier -- --write && npm run swiftlint -- --autocorrect --format",
     "eslint": "eslint . --ext .ts",
-    "prettier": "prettier --config .prettierrc.js \"**/*.{css,html,ts,js,java}\"",
+    "prettier": "prettier \"**/*.{css,html,ts,js,java}\" --plugin=prettier-plugin-java",
     "swiftlint": "node-swiftlint",
     "docgen": "docgen --api NativeAudio --output-readme README.md --output-json dist/docs.json",
     "build": "npm run clean && npm run docgen && tsc && rollup -c rollup.config.mjs",
@@ -36,8 +46,6 @@
     "watch": "tsc --watch",
     "prepublishOnly": "npm run build"
   },
-  "author": "Martin Donadieu <martin@capgo.app>",
-  "license": "MIT",
   "devDependencies": {
     "@capacitor/android": "^7.0.0",
     "@capacitor/cli": "^7.0.0",
@@ -61,6 +69,11 @@
   "peerDependencies": {
     "@capacitor/core": ">=7.0.0"
   },
+  "prettier": "@ionic/prettier-config",
+  "swiftlint": "@ionic/swiftlint-config",
+  "eslintConfig": {
+    "extends": "@ionic/eslint-config/recommended"
+  },
   "capacitor": {
     "ios": {
       "src": "ios"
@@ -68,20 +81,5 @@
     "android": {
       "src": "android"
     }
-  },
-  "eslintConfig": {
-    "extends": "@ionic/eslint-config/recommended"
-  },
-  "prettier": "@ionic/prettier-config",
-  "swiftlint": "@ionic/swiftlint-config",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Cap-go/native-audio"
-  },
-  "bugs": {
-    "url": "https://github.com/Cap-go/native-audio/issues"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }

@@ -1,178 +1,195 @@
 package ee.forgr.audio;
 
+import android.content.Context;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.util.Log;
+import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 public class RemoteAudioAsset extends AudioAsset {
 
-  private static final String TAG = "RemoteAudioAsset";
-  private final ArrayList<MediaPlayer> mediaPlayers;
-  private int playIndex = 0;
-  private final Uri uri;
-  private float volume;
-  private boolean isPrepared = false;
+    private static final String TAG = "RemoteAudioAsset";
+    private final ArrayList<MediaPlayer> mediaPlayers;
+    private int playIndex = 0;
+    private final Uri uri;
+    private float volume;
+    private boolean isPrepared = false;
 
-  public RemoteAudioAsset(
-    NativeAudio owner,
-    String assetId,
-    Uri uri,
-    int audioChannelNum,
-    float volume
-  ) throws Exception {
-    super(owner, assetId, null, 0, volume);
-    this.uri = uri;
-    this.volume = volume;
-    this.mediaPlayers = new ArrayList<>();
+    public RemoteAudioAsset(NativeAudio owner, String assetId, Uri uri, int audioChannelNum, float volume) throws Exception {
+        super(owner, assetId, null, 0, volume);
+        this.uri = uri;
+        this.volume = volume;
+        this.mediaPlayers = new ArrayList<>();
 
-    if (audioChannelNum < 1) {
-      audioChannelNum = 1;
-    }
-
-    for (int i = 0; i < audioChannelNum; i++) {
-      MediaPlayer mediaPlayer = new MediaPlayer();
-      mediaPlayers.add(mediaPlayer);
-      initializeMediaPlayer(mediaPlayer);
-    }
-  }
-
-  private void initializeMediaPlayer(MediaPlayer mediaPlayer) {
-    try {
-      mediaPlayer.setDataSource(owner.getContext(), uri);
-      mediaPlayer.setVolume(volume, volume);
-      mediaPlayer.setOnPreparedListener(mp -> {
-        isPrepared = true;
-        Log.d(TAG, "MediaPlayer prepared for " + uri.toString());
-      });
-      mediaPlayer.setOnCompletionListener(mp -> {
-        notifyCompletion();
-      });
-      mediaPlayer.setOnErrorListener((mp, what, extra) -> {
-        Log.e(TAG, "MediaPlayer error: " + what + ", " + extra);
-        return false;
-      });
-      mediaPlayer.prepareAsync();
-    } catch (Exception e) {
-      Log.e(TAG, "Error initializing MediaPlayer", e);
-    }
-  }
-
-  @Override
-  public void play(Double time) throws Exception {
-    if (mediaPlayers.isEmpty()) {
-      throw new Exception("No MediaPlayer available");
-    }
-
-    MediaPlayer mediaPlayer = mediaPlayers.get(playIndex);
-    if (!isPrepared) {
-      Log.d(TAG, "MediaPlayer not yet prepared, waiting...");
-      mediaPlayer.setOnPreparedListener(mp -> {
-        isPrepared = true;
-        try {
-          playInternal(mediaPlayer, time);
-        } catch (Exception e) {
-          Log.e(TAG, "Error playing after prepare", e);
+        if (audioChannelNum < 1) {
+            audioChannelNum = 1;
         }
-      });
-    } else {
-      playInternal(mediaPlayer, time);
+
+        for (int i = 0; i < audioChannelNum; i++) {
+            MediaPlayer mediaPlayer = new MediaPlayer();
+            mediaPlayers.add(mediaPlayer);
+            initializeMediaPlayer(mediaPlayer);
+        }
     }
 
-    playIndex = (playIndex + 1) % mediaPlayers.size();
-  }
+    private void initializeMediaPlayer(MediaPlayer mediaPlayer) {
+        try {
+            // Add caching headers
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Cache-Control", "max-age=31536000"); // Cache for 1 year
 
-  private void playInternal(MediaPlayer mediaPlayer, Double time)
-    throws Exception {
-    if (time != null) {
-      mediaPlayer.seekTo((int) (time * 1000));
+            mediaPlayer.setDataSource(owner.getContext(), uri, headers);
+            mediaPlayer.setVolume(volume, volume);
+            mediaPlayer.setOnPreparedListener(mp -> {
+                isPrepared = true;
+                Log.d(TAG, "MediaPlayer prepared for " + uri.toString());
+            });
+            mediaPlayer.setOnCompletionListener(mp -> {
+                notifyCompletion();
+            });
+            mediaPlayer.setOnErrorListener((mp, what, extra) -> {
+                Log.e(TAG, "MediaPlayer error: " + what + ", " + extra);
+                return false;
+            });
+            mediaPlayer.prepareAsync();
+        } catch (Exception e) {
+            Log.e(TAG, "Error initializing MediaPlayer", e);
+        }
     }
-    mediaPlayer.start();
-  }
 
-  @Override
-  public boolean pause() throws Exception {
-    boolean wasPlaying = false;
-    for (MediaPlayer mediaPlayer : mediaPlayers) {
-      if (mediaPlayer.isPlaying()) {
-        mediaPlayer.pause();
-        wasPlaying = true;
-      }
+    @Override
+    public void play(Double time) throws Exception {
+        if (mediaPlayers.isEmpty()) {
+            throw new Exception("No MediaPlayer available");
+        }
+
+        MediaPlayer mediaPlayer = mediaPlayers.get(playIndex);
+        if (!isPrepared) {
+            Log.d(TAG, "MediaPlayer not yet prepared, waiting...");
+            mediaPlayer.setOnPreparedListener(mp -> {
+                isPrepared = true;
+                try {
+                    playInternal(mediaPlayer, time);
+                } catch (Exception e) {
+                    Log.e(TAG, "Error playing after prepare", e);
+                }
+            });
+        } else {
+            playInternal(mediaPlayer, time);
+        }
+
+        playIndex = (playIndex + 1) % mediaPlayers.size();
     }
-    return wasPlaying;
-  }
 
-  @Override
-  public void resume() throws Exception {
-    for (MediaPlayer mediaPlayer : mediaPlayers) {
-      if (!mediaPlayer.isPlaying()) {
+    private void playInternal(MediaPlayer mediaPlayer, Double time) throws Exception {
+        if (time != null) {
+            mediaPlayer.seekTo((int) (time * 1000));
+        }
         mediaPlayer.start();
-      }
     }
-  }
 
-  @Override
-  public void stop() throws Exception {
-    for (MediaPlayer mediaPlayer : mediaPlayers) {
-      if (mediaPlayer.isPlaying()) {
-        mediaPlayer.stop();
-      }
-      // Reset the MediaPlayer to make it ready for future playback
-      mediaPlayer.reset();
-      initializeMediaPlayer(mediaPlayer);
+    @Override
+    public boolean pause() throws Exception {
+        boolean wasPlaying = false;
+        for (MediaPlayer mediaPlayer : mediaPlayers) {
+            if (mediaPlayer.isPlaying()) {
+                mediaPlayer.pause();
+                wasPlaying = true;
+            }
+        }
+        return wasPlaying;
     }
-    isPrepared = false;
-  }
 
-  @Override
-  public void loop() throws Exception {
-    if (!mediaPlayers.isEmpty()) {
-      MediaPlayer mediaPlayer = mediaPlayers.get(playIndex);
-      mediaPlayer.setLooping(true);
-      mediaPlayer.start();
-      playIndex = (playIndex + 1) % mediaPlayers.size();
+    @Override
+    public void resume() throws Exception {
+        for (MediaPlayer mediaPlayer : mediaPlayers) {
+            if (!mediaPlayer.isPlaying()) {
+                mediaPlayer.start();
+            }
+        }
     }
-  }
 
-  @Override
-  public void unload() throws Exception {
-    for (MediaPlayer mediaPlayer : mediaPlayers) {
-      mediaPlayer.release();
+    @Override
+    public void stop() throws Exception {
+        for (MediaPlayer mediaPlayer : mediaPlayers) {
+            if (mediaPlayer.isPlaying()) {
+                mediaPlayer.stop();
+            }
+            // Reset the MediaPlayer to make it ready for future playback
+            mediaPlayer.reset();
+            initializeMediaPlayer(mediaPlayer);
+        }
+        isPrepared = false;
     }
-    mediaPlayers.clear();
-  }
 
-  @Override
-  public void setVolume(float volume) throws Exception {
-    this.volume = volume;
-    for (MediaPlayer mediaPlayer : mediaPlayers) {
-      mediaPlayer.setVolume(volume, volume);
+    @Override
+    public void loop() throws Exception {
+        if (!mediaPlayers.isEmpty()) {
+            MediaPlayer mediaPlayer = mediaPlayers.get(playIndex);
+            mediaPlayer.setLooping(true);
+            mediaPlayer.start();
+            playIndex = (playIndex + 1) % mediaPlayers.size();
+        }
     }
-  }
 
-  @Override
-  public boolean isPlaying() throws Exception {
-    for (MediaPlayer mediaPlayer : mediaPlayers) {
-      if (mediaPlayer.isPlaying()) {
-        return true;
-      }
+    @Override
+    public void unload() throws Exception {
+        for (MediaPlayer mediaPlayer : mediaPlayers) {
+            mediaPlayer.release();
+        }
+        mediaPlayers.clear();
     }
-    return false;
-  }
 
-  @Override
-  public double getDuration() {
-    if (!mediaPlayers.isEmpty() && isPrepared) {
-      return mediaPlayers.get(0).getDuration() / 1000.0;
+    @Override
+    public void setVolume(float volume) throws Exception {
+        this.volume = volume;
+        for (MediaPlayer mediaPlayer : mediaPlayers) {
+            mediaPlayer.setVolume(volume, volume);
+        }
     }
-    return 0;
-  }
 
-  @Override
-  public double getCurrentPosition() {
-    if (!mediaPlayers.isEmpty() && isPrepared) {
-      return mediaPlayers.get(0).getCurrentPosition() / 1000.0;
+    @Override
+    public boolean isPlaying() throws Exception {
+        for (MediaPlayer mediaPlayer : mediaPlayers) {
+            if (mediaPlayer.isPlaying()) {
+                return true;
+            }
+        }
+        return false;
     }
-    return 0;
-  }
+
+    @Override
+    public double getDuration() {
+        if (!mediaPlayers.isEmpty() && isPrepared) {
+            return mediaPlayers.get(0).getDuration() / 1000.0;
+        }
+        return 0;
+    }
+
+    @Override
+    public double getCurrentPosition() {
+        if (!mediaPlayers.isEmpty() && isPrepared) {
+            return mediaPlayers.get(0).getCurrentPosition() / 1000.0;
+        }
+        return 0;
+    }
+
+    public static void clearCache(Context context) {
+        try {
+            File cacheDir = context.getCacheDir();
+            File[] files = cacheDir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.getName().endsWith(".mp3") || file.getName().endsWith(".wav")) {
+                        file.delete();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error clearing audio cache", e);
+        }
+    }
 }

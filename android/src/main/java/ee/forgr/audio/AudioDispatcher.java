@@ -15,192 +15,175 @@ import android.os.Build;
 import android.util.Log;
 
 public class AudioDispatcher
-  implements
-    MediaPlayer.OnPreparedListener,
-    MediaPlayer.OnCompletionListener,
-    MediaPlayer.OnSeekCompleteListener {
+    implements MediaPlayer.OnPreparedListener, MediaPlayer.OnCompletionListener, MediaPlayer.OnSeekCompleteListener {
 
-  private final String TAG = "AudioDispatcher";
-  private final MediaPlayer mediaPlayer;
-  private int mediaState;
-  private AudioAsset owner;
+    private final String TAG = "AudioDispatcher";
+    private final MediaPlayer mediaPlayer;
+    private int mediaState;
+    private AudioAsset owner;
 
-  public AudioDispatcher(AssetFileDescriptor assetFileDescriptor, float volume)
-    throws Exception {
-    mediaState = INVALID;
+    public AudioDispatcher(AssetFileDescriptor assetFileDescriptor, float volume) throws Exception {
+        mediaState = INVALID;
 
-    mediaPlayer = new MediaPlayer();
-    mediaPlayer.setOnCompletionListener(this);
-    mediaPlayer.setOnPreparedListener(this);
-    mediaPlayer.setDataSource(
-      assetFileDescriptor.getFileDescriptor(),
-      assetFileDescriptor.getStartOffset(),
-      assetFileDescriptor.getLength()
-    );
-    mediaPlayer.setOnSeekCompleteListener(this);
-    mediaPlayer.setAudioAttributes(
-      new AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_MEDIA)
-        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-        .build()
-    );
-    mediaPlayer.setVolume(volume, volume);
-    mediaPlayer.prepare();
-  }
-
-  public void setOwner(AudioAsset asset) {
-    owner = asset;
-  }
-
-  public double getDuration() {
-    return mediaPlayer.getDuration() / 1000.0;
-  }
-
-  public void setCurrentPosition(double time) {
-    if (mediaState == PLAYING || mediaState == PAUSE) {
-      mediaPlayer.seekTo((int) (time * 1000));
-    }
-  }
-
-  public double getCurrentPosition() {
-    return mediaPlayer.getCurrentPosition() / 1000.0;
-  }
-
-  public void play(Double time) throws Exception {
-    invokePlay(time);
-  }
-
-  public boolean pause() throws Exception {
-    if (mediaPlayer.isPlaying()) {
-      mediaPlayer.pause();
-      mediaState = PAUSE;
-      return true;
+        mediaPlayer = new MediaPlayer();
+        mediaPlayer.setOnCompletionListener(this);
+        mediaPlayer.setOnPreparedListener(this);
+        mediaPlayer.setDataSource(
+            assetFileDescriptor.getFileDescriptor(),
+            assetFileDescriptor.getStartOffset(),
+            assetFileDescriptor.getLength()
+        );
+        mediaPlayer.setOnSeekCompleteListener(this);
+        mediaPlayer.setAudioAttributes(
+            new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+        );
+        mediaPlayer.setVolume(volume, volume);
+        mediaPlayer.prepare();
     }
 
-    return false;
-  }
-
-  public void resume() throws Exception {
-    mediaPlayer.start();
-  }
-
-  public void stop() throws Exception {
-    if (mediaPlayer.isPlaying()) {
-      mediaState = INVALID;
-      mediaPlayer.pause();
-      mediaPlayer.seekTo(0);
+    public void setOwner(AudioAsset asset) {
+        owner = asset;
     }
-  }
 
-  public void setVolume(float volume) throws Exception {
-    mediaPlayer.setVolume(volume, volume);
-  }
-
-  public void setRate(float rate) throws Exception {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-      return;
+    public double getDuration() {
+        return mediaPlayer.getDuration() / 1000.0;
     }
-    mediaPlayer.setPlaybackParams(
-      mediaPlayer.getPlaybackParams().setSpeed(rate)
-    );
-  }
 
-  public void loop() throws Exception {
-    mediaPlayer.setLooping(true);
-    mediaPlayer.start();
-  }
-
-  public void unload() throws Exception {
-    this.stop();
-    mediaPlayer.release();
-  }
-
-  @Override
-  public void onCompletion(MediaPlayer mp) {
-    try {
-      if (mediaState != LOOPING) {
-        this.mediaState = INVALID;
-
-        this.stop();
-
-        if (this.owner != null) {
-          this.owner.notifyCompletion();
+    public void setCurrentPosition(double time) {
+        if (mediaState == PLAYING || mediaState == PAUSE) {
+            mediaPlayer.seekTo((int) (time * 1000));
         }
-      }
-    } catch (Exception ex) {
-      Log.d(
-        TAG,
-        "Caught exception while listening for onCompletion: " +
-        ex.getLocalizedMessage()
-      );
     }
-  }
 
-  @Override
-  public void onPrepared(MediaPlayer mp) {
-    try {
-      if (mediaState == PENDING_PLAY) {
-        mediaPlayer.setLooping(false);
-      } else if (mediaState == PENDING_LOOP) {
+    public double getCurrentPosition() {
+        return mediaPlayer.getCurrentPosition() / 1000.0;
+    }
+
+    public void play(Double time) throws Exception {
+        invokePlay(time);
+    }
+
+    public boolean pause() throws Exception {
+        if (mediaPlayer.isPlaying()) {
+            mediaPlayer.pause();
+            mediaState = PAUSE;
+            return true;
+        }
+
+        return false;
+    }
+
+    public void resume() throws Exception {
+        mediaPlayer.start();
+    }
+
+    public void stop() throws Exception {
+        if (mediaPlayer.isPlaying()) {
+            mediaState = INVALID;
+            mediaPlayer.pause();
+            mediaPlayer.seekTo(0);
+        }
+    }
+
+    public void setVolume(float volume) throws Exception {
+        mediaPlayer.setVolume(volume, volume);
+    }
+
+    public void setRate(float rate) throws Exception {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return;
+        }
+        mediaPlayer.setPlaybackParams(mediaPlayer.getPlaybackParams().setSpeed(rate));
+    }
+
+    public void loop() throws Exception {
         mediaPlayer.setLooping(true);
-      } else {
-        mediaState = PREPARED;
-      }
-    } catch (Exception ex) {
-      Log.d(
-        TAG,
-        "Caught exception while listening for onPrepared: " +
-        ex.getLocalizedMessage()
-      );
+        mediaPlayer.start();
     }
-  }
 
-  private void seek(Double time) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      mediaPlayer.seekTo((int) (time * 1000), MediaPlayer.SEEK_NEXT_SYNC);
-    } else {
-      mediaPlayer.seekTo((int) (time * 1000));
+    public void unload() throws Exception {
+        this.stop();
+        mediaPlayer.release();
     }
-  }
 
-  private void invokePlay(Double time) {
-    try {
-      boolean playing = mediaPlayer.isPlaying();
+    @Override
+    public void onCompletion(MediaPlayer mp) {
+        try {
+            if (mediaState != LOOPING) {
+                this.mediaState = INVALID;
 
-      if (playing) {
-        mediaPlayer.pause();
-        mediaPlayer.setLooping(false);
-        mediaState = PENDING_PLAY;
-        seek(time);
-      } else {
-        if (mediaState == PREPARED) {
-          mediaState = (PENDING_PLAY);
-          onPrepared(mediaPlayer);
-          seek(time);
-        } else {
-          mediaState = (PENDING_PLAY);
-          mediaPlayer.setLooping(false);
-          seek(time);
+                this.stop();
+
+                if (this.owner != null) {
+                    this.owner.notifyCompletion();
+                }
+            }
+        } catch (Exception ex) {
+            Log.d(TAG, "Caught exception while listening for onCompletion: " + ex.getLocalizedMessage());
         }
-      }
-    } catch (Exception ex) {
-      Log.d(
-        TAG,
-        "Caught exception while invoking audio: " + ex.getLocalizedMessage()
-      );
     }
-  }
 
-  @Override
-  public void onSeekComplete(MediaPlayer mp) {
-    if (mediaState == PENDING_PLAY || mediaState == PENDING_LOOP) {
-      Log.w("AudioDispatcher", "play " + mediaState);
-      mediaPlayer.start();
-      mediaState = PLAYING;
+    @Override
+    public void onPrepared(MediaPlayer mp) {
+        try {
+            if (mediaState == PENDING_PLAY) {
+                mediaPlayer.setLooping(false);
+            } else if (mediaState == PENDING_LOOP) {
+                mediaPlayer.setLooping(true);
+            } else {
+                mediaState = PREPARED;
+            }
+        } catch (Exception ex) {
+            Log.d(TAG, "Caught exception while listening for onPrepared: " + ex.getLocalizedMessage());
+        }
     }
-  }
 
-  public boolean isPlaying() throws Exception {
-    return mediaPlayer.isPlaying();
-  }
+    private void seek(Double time) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            mediaPlayer.seekTo((int) (time * 1000), MediaPlayer.SEEK_NEXT_SYNC);
+        } else {
+            mediaPlayer.seekTo((int) (time * 1000));
+        }
+    }
+
+    private void invokePlay(Double time) {
+        try {
+            boolean playing = mediaPlayer.isPlaying();
+
+            if (playing) {
+                mediaPlayer.pause();
+                mediaPlayer.setLooping(false);
+                mediaState = PENDING_PLAY;
+                seek(time);
+            } else {
+                if (mediaState == PREPARED) {
+                    mediaState = (PENDING_PLAY);
+                    onPrepared(mediaPlayer);
+                    seek(time);
+                } else {
+                    mediaState = (PENDING_PLAY);
+                    mediaPlayer.setLooping(false);
+                    seek(time);
+                }
+            }
+        } catch (Exception ex) {
+            Log.d(TAG, "Caught exception while invoking audio: " + ex.getLocalizedMessage());
+        }
+    }
+
+    @Override
+    public void onSeekComplete(MediaPlayer mp) {
+        if (mediaState == PENDING_PLAY || mediaState == PENDING_LOOP) {
+            Log.w("AudioDispatcher", "play " + mediaState);
+            mediaPlayer.start();
+            mediaState = PLAYING;
+        }
+    }
+
+    public boolean isPlaying() throws Exception {
+        return mediaPlayer.isPlaying();
+    }
 }

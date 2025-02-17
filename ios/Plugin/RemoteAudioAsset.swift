@@ -5,13 +5,18 @@ public class RemoteAudioAsset: AudioAsset {
     var players: [AVPlayer] = []
     var playerObservers: [NSKeyValueObservation] = []
     var duration: TimeInterval = 0
+    var asset: AVURLAsset?
 
     override init(owner: NativeAudio, withAssetId assetId: String, withPath path: String!, withChannels channels: Int!, withVolume volume: Float!, withFadeDelay delay: Float!) {
         super.init(owner: owner, withAssetId: assetId, withPath: path, withChannels: channels, withVolume: volume, withFadeDelay: delay)
 
         if let url = URL(string: path) {
+            // Create a single shared asset with caching
+            let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
+            self.asset = asset
+
             for _ in 0..<channels {
-                let playerItem = AVPlayerItem(url: url)
+                let playerItem = AVPlayerItem(asset: asset)
                 let player = AVPlayer(playerItem: playerItem)
                 player.volume = volume
                 self.playerItems.append(playerItem)
@@ -76,19 +81,32 @@ public class RemoteAudioAsset: AudioAsset {
 
     override func loop() {
         for player in players {
+            // Set player to loop
             player.actionAtItemEnd = .none
+
+            // Remove any existing notification observers first
+            NotificationCenter.default.removeObserver(self,
+                                                      name: .AVPlayerItemDidPlayToEndTime,
+                                                      object: player.currentItem)
+
+            // Add observer for looping
             NotificationCenter.default.addObserver(self,
                                                    selector: #selector(playerItemDidReachEnd(notification:)),
                                                    name: .AVPlayerItemDidPlayToEndTime,
                                                    object: player.currentItem)
+
+            // Start playing
+            player.seek(to: .zero)
             player.play()
         }
     }
 
     @objc func playerItemDidReachEnd(notification: Notification) {
-        guard let player = notification.object as? AVPlayer else { return }
-        player.seek(to: CMTime.zero)
-        player.play()
+        if let playerItem = notification.object as? AVPlayerItem,
+           let player = players.first(where: { $0.currentItem == playerItem }) {
+            player.seek(to: .zero)
+            player.play()
+        }
     }
 
     override func unload() {
@@ -127,5 +145,19 @@ public class RemoteAudioAsset: AudioAsset {
 
     override func getDuration() -> TimeInterval {
         return duration
+    }
+
+    static func clearCache() {
+        let urls = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
+        if let cachePath = urls.first {
+            do {
+                let fileURLs = try FileManager.default.contentsOfDirectory(at: cachePath, includingPropertiesForKeys: nil)
+                for fileURL in fileURLs where fileURL.pathExtension == "mp3" || fileURL.pathExtension == "wav" {
+                    try FileManager.default.removeItem(at: fileURL)
+                }
+            } catch {
+                print("Error clearing audio cache: \(error)")
+            }
+        }
     }
 }

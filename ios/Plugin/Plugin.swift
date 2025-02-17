@@ -28,7 +28,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         CAPPluginMethod(name: "getCurrentTime", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getDuration", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "resume", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setCurrentTime", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "setCurrentTime", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clearCache", returnType: CAPPluginReturnPromise)
     ]
     private let audioQueue = DispatchQueue(label: "ee.forgr.audio.queue", qos: .userInitiated)
     private var audioList: [String: Any] = [:] {
@@ -377,6 +378,13 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             call.resolve([
                 "isPlaying": audioAsset.isPlaying()
             ])
+        }
+    }
+
+    @objc func clearCache(_ call: CAPPluginCall) {
+        audioQueue.async {
+            RemoteAudioAsset.clearCache()
+            call.resolve()
         }
     }
 

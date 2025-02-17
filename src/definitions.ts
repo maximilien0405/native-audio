@@ -1,4 +1,4 @@
-import type { PluginListenerHandle } from "@capacitor/core";
+import type { PluginListenerHandle } from '@capacitor/core';
 
 export interface CompletedEvent {
   /**
@@ -119,11 +119,7 @@ export interface NativeAudio {
    * @param option {@link PlayOptions}
    * @returns
    */
-  play(options: {
-    assetId: string;
-    time?: number;
-    delay?: number;
-  }): Promise<void>;
+  play(options: { assetId: string; time?: number; delay?: number }): Promise<void>;
   /**
    * Pause an audio file
    * @since 5.0.0
@@ -186,9 +182,7 @@ export interface NativeAudio {
    * @param option {@link AssetPlayOptions}
    * @returns {Promise<{ currentTime: number }>}
    */
-  getCurrentTime(options: {
-    assetId: string;
-  }): Promise<{ currentTime: number }>;
+  getCurrentTime(options: { assetId: string }): Promise<{ currentTime: number }>;
   /**
    * Get the duration of an audio file
    * @since 5.0.0
@@ -210,8 +204,11 @@ export interface NativeAudio {
    * @since 5.0.0
    * return {@link CompletedEvent}
    */
-  addListener(
-    eventName: "complete",
-    listenerFunc: CompletedListener,
-  ): Promise<PluginListenerHandle>;
+  addListener(eventName: 'complete', listenerFunc: CompletedListener): Promise<PluginListenerHandle>;
+  /**
+   * Clear the audio cache for remote audio files
+   * @since 6.5.0
+   * @returns {Promise<void>}
+   */
+  clearCache(): Promise<void>;
 }

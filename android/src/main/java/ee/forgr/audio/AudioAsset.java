@@ -11,9 +11,9 @@ public class AudioAsset {
 
     private final ArrayList<AudioDispatcher> audioList;
     private int playIndex = 0;
-    private final String assetId;
     protected final NativeAudio owner;
     protected AudioCompletionListener completionListener;
+    protected String assetId;
 
     AudioAsset(NativeAudio owner, String assetId, AssetFileDescriptor assetFileDescriptor, int audioChannelNum, float volume)
         throws Exception {
@@ -179,5 +179,9 @@ public class AudioAsset {
         if (completionListener != null) {
             completionListener.onCompletion(this.assetId);
         }
+    }
+
+    protected String getAssetId() {
+        return assetId;
     }
 }

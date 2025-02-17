@@ -526,13 +526,13 @@ Clear the audio cache for remote audio files
 
 #### PreloadOptions
 
-| Prop                  | Type                 | Description                                                                                        |
-| --------------------- | -------------------- | -------------------------------------------------------------------------------------------------- |
-| **`assetPath`**       | <code>string</code>  | Path to the audio file, relative path of the file, absolute url (file://) or remote url (https://) |
-| **`assetId`**         | <code>string</code>  | Asset Id, unique identifier of the file                                                            |
-| **`volume`**          | <code>number</code>  | Volume of the audio, between 0.1 and 1.0                                                           |
-| **`audioChannelNum`** | <code>number</code>  | Audio channel number, default is 1                                                                 |
-| **`isUrl`**           | <code>boolean</code> | Is the audio file a URL, pass true if assetPath is a `file://` url                                 |
+| Prop                  | Type                 | Description                                                                                                                                                                           |
+| --------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`assetPath`**       | <code>string</code>  | Path to the audio file, relative path of the file, absolute url (file://) or remote url (https://) Supported formats: - MP3, WAV (all platforms) - M3U8/HLS streams (iOS and Android) |
+| **`assetId`**         | <code>string</code>  | Asset Id, unique identifier of the file                                                                                                                                               |
+| **`volume`**          | <code>number</code>  | Volume of the audio, between 0.1 and 1.0                                                                                                                                              |
+| **`audioChannelNum`** | <code>number</code>  | Audio channel number, default is 1                                                                                                                                                    |
+| **`isUrl`**           | <code>boolean</code> | Is the audio file a URL, pass true if assetPath is a `file://` url or a streaming URL (m3u8)                                                                                          |
 
 
 #### Assets

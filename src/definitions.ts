@@ -70,6 +70,9 @@ export interface ConfigureOptions {
 export interface PreloadOptions {
   /**
    * Path to the audio file, relative path of the file, absolute url (file://) or remote url (https://)
+   * Supported formats:
+   * - MP3, WAV (all platforms)
+   * - M3U8/HLS streams (iOS and Android)
    */
   assetPath: string;
   /**
@@ -86,6 +89,7 @@ export interface PreloadOptions {
   audioChannelNum?: number;
   /**
    * Is the audio file a URL, pass true if assetPath is a `file://` url
+   * or a streaming URL (m3u8)
    */
   isUrl?: boolean;
 }

@@ -134,17 +134,26 @@ public class RemoteAudioAsset: AudioAsset {
     }
 
     override func isPlaying() -> Bool {
-        return players.contains { $0.timeControlStatus == .playing }
+        guard !players.isEmpty else { return false }
+        let player = players[playIndex]
+        return player.timeControlStatus == .playing
     }
 
     override func getCurrentTime() -> TimeInterval {
         guard !players.isEmpty else { return 0 }
         let player = players[playIndex]
+        // This will work for both regular files and streams
         return player.currentTime().seconds
     }
 
     override func getDuration() -> TimeInterval {
-        return duration
+        // For infinite streams, duration will be CMTime.indefinite
+        guard !players.isEmpty else { return 0 }
+        let player = players[playIndex]
+        if player.currentItem?.duration == CMTime.indefinite {
+            return 0 // Or return -1 to indicate infinite stream
+        }
+        return player.currentItem?.duration.seconds ?? 0
     }
 
     static func clearCache() {

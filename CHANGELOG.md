@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [7.2.1](https://github.com/Cap-go/native-audio/compare/7.2.0...7.2.1) (2025-02-18)
+
+
+### Bug Fixes
+
+* IOS issue with concurency + make m3u8 work perfect with cache ([a38e496](https://github.com/Cap-go/native-audio/commit/a38e49659795735346b583bfeb452dc0131747a8))
+
 ## [7.2.0](https://github.com/Cap-go/native-audio/compare/7.1.11...7.2.0) (2025-02-17)
 
 

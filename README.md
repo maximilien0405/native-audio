@@ -499,6 +499,28 @@ return {@link CompletedEvent}
 --------------------
 
 
+### addListener('currentTime', ...)
+
+```typescript
+addListener(eventName: 'currentTime', listenerFunc: CurrentTimeListener) => Promise<PluginListenerHandle>
+```
+
+Listen for current time updates
+Emits every 100ms while audio is playing
+
+| Param              | Type                                                                |
+| ------------------ | ------------------------------------------------------------------- |
+| **`eventName`**    | <code>'currentTime'</code>                                          |
+| **`listenerFunc`** | <code><a href="#currenttimelistener">CurrentTimeListener</a></code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 6.5.0
+return {@link CurrentTimeEvent}
+
+--------------------
+
+
 ### clearCache()
 
 ```typescript
@@ -556,11 +578,24 @@ Clear the audio cache for remote audio files
 | **`assetId`** | <code>string</code> | Emit when a play completes | 5.0.0 |
 
 
+#### CurrentTimeEvent
+
+| Prop              | Type                | Description                          | Since |
+| ----------------- | ------------------- | ------------------------------------ | ----- |
+| **`currentTime`** | <code>number</code> | Current time of the audio in seconds | 6.5.0 |
+| **`assetId`**     | <code>string</code> | Asset Id of the audio                | 6.5.0 |
+
+
 ### Type Aliases
 
 
 #### CompletedListener
 
 <code>(state: <a href="#completedevent">CompletedEvent</a>): void</code>
+
+
+#### CurrentTimeListener
+
+<code>(state: <a href="#currenttimeevent">CurrentTimeEvent</a>): void</code>
 
 </docgen-api>

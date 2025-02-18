@@ -463,7 +463,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
 
         if self.fadeMusic {
-            audioAsset.playWithFade(time: audioAsset.getCurrentTime())
+            audioAsset.stopWithFade()
         } else {
             audioAsset.stop()
         }
@@ -476,6 +476,21 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             audioQueue.sync(flags: .barrier) {
                 block()
             }
+        }
+    }
+
+    @objc func notifyCurrentTime(_ asset: AudioAsset) {
+        NSLog("notifyCurrentTime called in Plugin")
+        audioQueue.sync {
+            let rawTime = asset.getCurrentTime()
+            // Round to nearest 100ms (0.1 seconds)
+            let currentTime = round(rawTime * 10) / 10
+            NSLog("About to notify listeners with time: \(currentTime)")
+            notifyListeners("currentTime", data: [
+                "currentTime": currentTime,
+                "assetId": asset.assetId
+            ])
+            NSLog("Listeners notified")
         }
     }
 }

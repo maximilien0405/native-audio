@@ -60,13 +60,18 @@ public class RemoteAudioAsset: AudioAsset {
             guard !players.isEmpty else { return }
             let player = players[playIndex]
             if delay > 0 {
-                let timeToPlay = CMTimeAdd(CMTimeMakeWithSeconds(player.currentTime().seconds, preferredTimescale: 1), CMTimeMakeWithSeconds(delay, preferredTimescale: 1))
+                // Convert delay to CMTime and add to current time
+                let currentTime = player.currentTime()
+                let delayTime = CMTimeMakeWithSeconds(delay, preferredTimescale: currentTime.timescale)
+                let timeToPlay = CMTimeAdd(currentTime, delayTime)
                 player.seek(to: timeToPlay)
             } else {
                 player.seek(to: CMTimeMakeWithSeconds(time, preferredTimescale: 1))
             }
             player.play()
             playIndex = (playIndex + 1) % players.count
+            NSLog("RemoteAudioAsset: About to start timer updates")
+            startCurrentTimeUpdates()
         }
     }
 
@@ -75,6 +80,7 @@ public class RemoteAudioAsset: AudioAsset {
             guard !players.isEmpty else { return }
             let player = players[playIndex]
             player.pause()
+            stopCurrentTimeUpdates()
         }
     }
 
@@ -83,15 +89,25 @@ public class RemoteAudioAsset: AudioAsset {
             guard !players.isEmpty else { return }
             let player = players[playIndex]
             player.play()
+            NSLog("RemoteAudioAsset Resume: About to start timer updates")
+            startCurrentTimeUpdates()  // Add timer start
         }
     }
 
     override func stop() {
         owner.executeOnAudioQueue { [self] in
+            stopCurrentTimeUpdates()  // Stop timer first
             for player in players {
+                // First pause
                 player.pause()
-                player.seek(to: CMTime.zero)
+                // Then reset to beginning
+                player.seek(to: .zero, completionHandler: { _ in
+                    // Reset any loop settings
+                    player.actionAtItemEnd = .pause
+                })
             }
+            // Reset playback state
+            playIndex = 0
         }
     }
 
@@ -109,6 +125,8 @@ public class RemoteAudioAsset: AudioAsset {
                 player.seek(to: .zero)
                 player.play()
             }
+            NSLog("RemoteAudioAsset Loop: About to start timer updates")
+            startCurrentTimeUpdates()  // Add timer start
         }
     }
 
@@ -124,6 +142,7 @@ public class RemoteAudioAsset: AudioAsset {
 
     override func unload() {
         owner.executeOnAudioQueue { [self] in
+            stopCurrentTimeUpdates()
             stop()
             NotificationCenter.default.removeObserver(self)
             // Remove KVO observers
@@ -193,6 +212,47 @@ public class RemoteAudioAsset: AudioAsset {
             result = player.currentItem?.duration.seconds ?? 0
         }
         return result
+    }
+
+    override func playWithFade(time: TimeInterval) {
+        owner.executeOnAudioQueue { [self] in
+            guard !players.isEmpty else { return }
+            let player = players[playIndex]
+            
+            if player.timeControlStatus != .playing {
+                player.seek(to: CMTimeMakeWithSeconds(time, preferredTimescale: 1))
+                player.volume = initialVolume
+                player.play()
+                playIndex = (playIndex + 1) % players.count
+                NSLog("RemoteAudioAsset PlayWithFade: About to start timer updates")
+                startCurrentTimeUpdates()
+            } else {
+                if player.volume < initialVolume {
+                    player.volume += self.FADESTEP
+                }
+            }
+        }
+    }
+
+    override func stopWithFade() {
+        owner.executeOnAudioQueue { [self] in
+            guard !players.isEmpty else { return }
+            let player = players[playIndex]
+            
+            if player.timeControlStatus == .playing {
+                if player.volume > self.FADESTEP {
+                    player.volume -= self.FADESTEP
+                    // Schedule next fade step
+                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(self.FADEDELAY * 1000))) { [weak self] in
+                        self?.stopWithFade()
+                    }
+                } else {
+                    // Volume is near 0, actually stop
+                    player.volume = 0
+                    self.stop()
+                }
+            }
+        }
     }
 
     static func clearCache() {

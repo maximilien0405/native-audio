@@ -94,6 +94,20 @@ export interface PreloadOptions {
   isUrl?: boolean;
 }
 
+export interface CurrentTimeEvent {
+  /**
+   * Current time of the audio in seconds
+   * @since 6.5.0
+   */
+  currentTime: number;
+  /**
+   * Asset Id of the audio
+   * @since 6.5.0
+   */
+  assetId: string;
+}
+export type CurrentTimeListener = (state: CurrentTimeEvent) => void;
+
 export interface NativeAudio {
   /**
    * Configure the audio player
@@ -209,6 +223,14 @@ export interface NativeAudio {
    * return {@link CompletedEvent}
    */
   addListener(eventName: 'complete', listenerFunc: CompletedListener): Promise<PluginListenerHandle>;
+  /**
+   * Listen for current time updates
+   * Emits every 100ms while audio is playing
+   * 
+   * @since 6.5.0
+   * return {@link CurrentTimeEvent}
+   */
+  addListener(eventName: 'currentTime', listenerFunc: CurrentTimeListener): Promise<PluginListenerHandle>;
   /**
    * Clear the audio cache for remote audio files
    * @since 6.5.0

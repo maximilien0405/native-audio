@@ -226,7 +226,7 @@ export interface NativeAudio {
   /**
    * Listen for current time updates
    * Emits every 100ms while audio is playing
-   * 
+   *
    * @since 6.5.0
    * return {@link CurrentTimeEvent}
    */

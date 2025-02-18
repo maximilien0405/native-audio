@@ -20,10 +20,11 @@ import android.content.res.AssetManager;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
-import android.os.ParcelFileDescriptor;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.ParcelFileDescriptor;
 import android.util.Log;
+import androidx.media3.common.util.UnstableApi;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -39,7 +40,6 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import androidx.media3.common.util.UnstableApi;
 
 @UnstableApi
 @CapacitorPlugin(
@@ -158,9 +158,8 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         try {
             if (focus) {
                 // Request audio focus for playback with ducking
-                int result = this.audioManager.requestAudioFocus(this,
-                    AudioManager.STREAM_MUSIC,
-                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK);  // Allow other audio to play quietly
+                int result =
+                    this.audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK); // Allow other audio to play quietly
             } else {
                 this.audioManager.abandonAudioFocus(this);
             }
@@ -171,7 +170,6 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             } else {
                 this.audioManager.setMode(AudioManager.MODE_NORMAL);
             }
-
         } catch (Exception ex) {
             Log.e(TAG, "Error configuring audio", ex);
         }
@@ -201,22 +199,28 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
     @PluginMethod
     public void preload(final PluginCall call) {
-        this.getActivity().runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                preloadAsset(call);
-            }
-        });
+        this.getActivity()
+            .runOnUiThread(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        preloadAsset(call);
+                    }
+                }
+            );
     }
 
     @PluginMethod
     public void play(final PluginCall call) {
-        this.getActivity().runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                playOrLoop("play", call);
-            }
-        });
+        this.getActivity()
+            .runOnUiThread(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        playOrLoop("play", call);
+                    }
+                }
+            );
     }
 
     @PluginMethod
@@ -340,22 +344,25 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
     @PluginMethod
     public void stop(final PluginCall call) {
-        this.getActivity().runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    String audioId = call.getString(ASSET_ID);
-                    if (!isStringValid(audioId)) {
-                        call.reject(ERROR_AUDIO_ID_MISSING + " - " + audioId);
-                        return;
+        this.getActivity()
+            .runOnUiThread(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            String audioId = call.getString(ASSET_ID);
+                            if (!isStringValid(audioId)) {
+                                call.reject(ERROR_AUDIO_ID_MISSING + " - " + audioId);
+                                return;
+                            }
+                            stopAudio(audioId);
+                            call.resolve();
+                        } catch (Exception ex) {
+                            call.reject(ex.getMessage());
+                        }
                     }
-                    stopAudio(audioId);
-                    call.resolve();
-                } catch (Exception ex) {
-                    call.reject(ex.getMessage());
                 }
-            }
-        });
+            );
     }
 
     @PluginMethod
@@ -483,17 +490,20 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             if (audioAssetList.containsKey(audioId)) {
                 AudioAsset asset = audioAssetList.get(audioId);
                 if (asset != null) {
-                    this.getActivity().runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            try {
-                                asset.setCurrentTime(time);
-                                call.resolve();
-                            } catch (Exception e) {
-                                call.reject("Error setting current time: " + e.getMessage());
+                    this.getActivity()
+                        .runOnUiThread(
+                            new Runnable() {
+                                @Override
+                                public void run() {
+                                    try {
+                                        asset.setCurrentTime(time);
+                                        call.resolve();
+                                    } catch (Exception e) {
+                                        call.reject("Error setting current time: " + e.getMessage());
+                                    }
+                                }
                             }
-                        }
-                    });
+                        );
                 } else {
                     call.reject(ERROR_ASSET_NOT_LOADED + " - " + audioId);
                 }
@@ -625,11 +635,11 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             final String audioId = call.getString(ASSET_ID);
             final Double time = call.getDouble("time", 0.0);
             Log.d(TAG, "Playing asset: " + audioId + ", action: " + action + ", assets count: " + audioAssetList.size());
-            
+
             if (audioAssetList.containsKey(audioId)) {
                 AudioAsset asset = audioAssetList.get(audioId);
                 Log.d(TAG, "Found asset: " + audioId + ", type: " + asset.getClass().getSimpleName());
-                
+
                 if (asset != null) {
                     if (LOOP.equals(action)) {
                         asset.loop();

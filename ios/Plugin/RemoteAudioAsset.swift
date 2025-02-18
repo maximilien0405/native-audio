@@ -116,12 +116,12 @@ public class RemoteAudioAsset: AudioAsset {
             for player in players {
                 player.actionAtItemEnd = .none
                 NotificationCenter.default.removeObserver(self,
-                                                      name: .AVPlayerItemDidPlayToEndTime,
-                                                      object: player.currentItem)
+                                                          name: .AVPlayerItemDidPlayToEndTime,
+                                                          object: player.currentItem)
                 NotificationCenter.default.addObserver(self,
-                                                   selector: #selector(playerItemDidReachEnd(notification:)),
-                                                   name: .AVPlayerItemDidPlayToEndTime,
-                                                   object: player.currentItem)
+                                                       selector: #selector(playerItemDidReachEnd(notification:)),
+                                                       name: .AVPlayerItemDidPlayToEndTime,
+                                                       object: player.currentItem)
                 player.seek(to: .zero)
                 player.play()
             }
@@ -218,7 +218,7 @@ public class RemoteAudioAsset: AudioAsset {
         owner.executeOnAudioQueue { [self] in
             guard !players.isEmpty else { return }
             let player = players[playIndex]
-            
+
             if player.timeControlStatus != .playing {
                 player.seek(to: CMTimeMakeWithSeconds(time, preferredTimescale: 1))
                 player.volume = initialVolume
@@ -238,7 +238,7 @@ public class RemoteAudioAsset: AudioAsset {
         owner.executeOnAudioQueue { [self] in
             guard !players.isEmpty else { return }
             let player = players[playIndex]
-            
+
             if player.timeControlStatus == .playing {
                 if player.volume > self.FADESTEP {
                     player.volume -= self.FADESTEP

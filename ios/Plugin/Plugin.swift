@@ -369,7 +369,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         let volume: Float?
         let delay: Float?
         var isLocalUrl: Bool = call.getBool("isUrl") ?? false
-        
+
         if audioId == "" {
             call.reject(Constant.ErrorAssetId)
             return

@@ -2,11 +2,11 @@ package ee.forgr.audio;
 
 import android.content.res.AssetFileDescriptor;
 import android.os.Build;
-import androidx.annotation.RequiresApi;
-import java.util.ArrayList;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import androidx.annotation.RequiresApi;
+import java.util.ArrayList;
 
 public class AudioAsset {
 
@@ -51,8 +51,8 @@ public class AudioAsset {
             audio.play(time);
             playIndex++;
             playIndex = playIndex % audioList.size();
-            Log.d(TAG, "Starting timer from play");  // Debug log
-            startCurrentTimeUpdates();  // Make sure this is called
+            Log.d(TAG, "Starting timer from play"); // Debug log
+            startCurrentTimeUpdates(); // Make sure this is called
         } else {
             throw new Exception("AudioDispatcher is null");
         }
@@ -91,7 +91,7 @@ public class AudioAsset {
     }
 
     public boolean pause() throws Exception {
-        stopCurrentTimeUpdates();  // Stop updates when pausing
+        stopCurrentTimeUpdates(); // Stop updates when pausing
         boolean wasPlaying = false;
 
         for (int x = 0; x < audioList.size(); x++) {
@@ -107,8 +107,8 @@ public class AudioAsset {
             AudioDispatcher audio = audioList.get(0);
             if (audio != null) {
                 audio.resume();
-                Log.d(TAG, "Starting timer from resume");  // Debug log
-                startCurrentTimeUpdates();  // Make sure this is called
+                Log.d(TAG, "Starting timer from resume"); // Debug log
+                startCurrentTimeUpdates(); // Make sure this is called
             } else {
                 throw new Exception("AudioDispatcher is null");
             }
@@ -116,7 +116,7 @@ public class AudioAsset {
     }
 
     public void stop() throws Exception {
-        stopCurrentTimeUpdates();  // Stop updates when stopping
+        stopCurrentTimeUpdates(); // Stop updates when stopping
         for (int x = 0; x < audioList.size(); x++) {
             AudioDispatcher audio = audioList.get(x);
 
@@ -199,18 +199,22 @@ public class AudioAsset {
     }
 
     public void setCurrentTime(double time) throws Exception {
-        owner.getActivity().runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                if (audioList.size() != 1) {
-                    return;
+        owner
+            .getActivity()
+            .runOnUiThread(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        if (audioList.size() != 1) {
+                            return;
+                        }
+                        AudioDispatcher audio = audioList.get(playIndex);
+                        if (audio != null) {
+                            audio.setCurrentPosition(time);
+                        }
+                    }
                 }
-                AudioDispatcher audio = audioList.get(playIndex);
-                if (audio != null) {
-                    audio.setCurrentPosition(time);
-                }
-            }
-        });
+            );
     }
 
     protected void startCurrentTimeUpdates() {
@@ -218,14 +222,17 @@ public class AudioAsset {
         if (currentTimeHandler == null) {
             currentTimeHandler = new Handler(Looper.getMainLooper());
         }
-        
+
         // Add small delay to let audio start playing
-        currentTimeHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                startTimeUpdateLoop();
-            }
-        }, 100);  // 100ms delay
+        currentTimeHandler.postDelayed(
+            new Runnable() {
+                @Override
+                public void run() {
+                    startTimeUpdateLoop();
+                }
+            },
+            100
+        ); // 100ms delay
     }
 
     private void startTimeUpdateLoop() {
@@ -273,6 +280,7 @@ public class AudioAsset {
         final Handler handler = new Handler(Looper.getMainLooper());
         final Runnable fadeRunnable = new Runnable() {
             float currentVolume = 0;
+
             @Override
             public void run() {
                 if (currentVolume < initialVolume) {
@@ -300,6 +308,7 @@ public class AudioAsset {
         final Handler handler = new Handler(Looper.getMainLooper());
         final Runnable fadeRunnable = new Runnable() {
             float currentVolume = initialVolume;
+
             @Override
             public void run() {
                 if (currentVolume > FADE_STEP) {

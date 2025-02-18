@@ -32,7 +32,7 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
         super.init()
 
         let pathUrl: URL = URL(string: path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!)!
-        
+
         owner.executeOnAudioQueue { [self] in
             for _ in 0..<channels {
                 do {
@@ -100,7 +100,7 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
                 playIndex = 0
                 return
             }
-            
+
             let player = channels[playIndex]
             player.currentTime = time
             player.numberOfLoops = 0
@@ -127,7 +127,7 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
                 playIndex = 0
                 return
             }
-            
+
             let player: AVAudioPlayer = channels[playIndex]
             player.currentTime = time
 
@@ -266,19 +266,19 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else {
                 NSLog("Self is nil in timer start")
-                return 
+                return
             }
-            
+
             self.currentTimeTimer?.invalidate()
             self.currentTimeTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
                 guard let self = self else {
                     NSLog("Self is nil in timer callback")
-                    return 
+                    return
                 }
-                
+
                 var shouldNotify = false
                 var currentTime: TimeInterval = 0
-                
+
                 self.owner.executeOnAudioQueue {
                     shouldNotify = self.isPlaying()
                     NSLog("isPlaying returned: \(shouldNotify)")

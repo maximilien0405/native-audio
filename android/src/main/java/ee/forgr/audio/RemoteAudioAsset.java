@@ -13,7 +13,8 @@ import androidx.media3.datasource.cache.CacheDataSource;
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor;
 import androidx.media3.datasource.cache.SimpleCache;
 import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.exoplayer.hls.HlsMediaSource;
+import androidx.media3.exoplayer.source.ProgressiveMediaSource;
+import androidx.media3.exoplayer.source.MediaSource;
 import java.io.File;
 import java.util.ArrayList;
 import androidx.media3.common.util.UnstableApi;
@@ -68,6 +69,7 @@ public class RemoteAudioAsset extends AudioAsset {
     @UnstableApi
     private void initializePlayer(ExoPlayer player) {
         Log.d(TAG, "Initializing player");
+        
         // Initialize cache if not already done
         if (cache == null) {
             File cacheDir = new File(owner.getContext().getCacheDir(), "media");
@@ -80,6 +82,25 @@ public class RemoteAudioAsset extends AudioAsset {
                 new StandaloneDatabaseProvider(owner.getContext())
             );
         }
+
+        // Create cached data source factory
+        DefaultHttpDataSource.Factory httpDataSourceFactory = new DefaultHttpDataSource.Factory()
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(15000)
+            .setReadTimeoutMs(15000);
+
+        CacheDataSource.Factory cacheDataSourceFactory = new CacheDataSource.Factory()
+            .setCache(cache)
+            .setUpstreamDataSourceFactory(httpDataSourceFactory)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
+
+        // Create media source
+        MediaSource mediaSource = new ProgressiveMediaSource.Factory(cacheDataSourceFactory)
+            .createMediaSource(MediaItem.fromUri(uri));
+        
+        player.setMediaSource(mediaSource);
+        player.setVolume(volume);
+        player.prepare();
 
         // Add listener for duration
         player.addListener(new Player.Listener() {
@@ -109,23 +130,6 @@ public class RemoteAudioAsset extends AudioAsset {
             }
         });
 
-        // Create cached data source factory
-        DefaultHttpDataSource.Factory httpDataSourceFactory = new DefaultHttpDataSource.Factory();
-        CacheDataSource.Factory cacheDataSourceFactory = new CacheDataSource.Factory()
-            .setCache(cache)
-            .setUpstreamDataSourceFactory(httpDataSourceFactory)
-            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
-
-        // Handle both HLS and regular audio
-        if (uri.toString().endsWith(".m3u8")) {
-            HlsMediaSource mediaSource = new HlsMediaSource.Factory(cacheDataSourceFactory).createMediaSource(MediaItem.fromUri(uri));
-            player.setMediaSource(mediaSource);
-        } else {
-            player.setMediaItem(MediaItem.fromUri(uri));
-        }
-
-        player.setVolume(volume);
-        player.prepare();
         Log.d(TAG, "Player initialization complete");
     }
 

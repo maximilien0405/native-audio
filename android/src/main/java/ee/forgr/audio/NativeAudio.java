@@ -53,7 +53,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
     public static final String TAG = "NativeAudio";
 
-    private static HashMap<String, AudioAsset> audioAssetList;
+    private static HashMap<String, AudioAsset> audioAssetList = new HashMap<>();
     private static ArrayList<AudioAsset> resumeList;
     private AudioManager audioManager;
     private boolean fadeMusic = false;
@@ -211,15 +211,12 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
     @PluginMethod
     public void play(final PluginCall call) {
-        this.getActivity()
-            .runOnUiThread(
-                new Runnable() {
-                    @Override
-                    public void run() {
-                        playOrLoop("play", call);
-                    }
-                }
-            );
+        this.getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                playOrLoop("play", call);
+            }
+        });
     }
 
     @PluginMethod
@@ -565,9 +562,18 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                     if (uri.getScheme() != null && (uri.getScheme().equals("http") || uri.getScheme().equals("https"))) {
                         // Remote URL
                         Log.d("AudioPlugin", "Debug: Remote URL detected: " + uri.toString());
-                        RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(this, audioId, uri, audioChannelNum, volume);
-                        remoteAudioAsset.setCompletionListener(this::dispatchComplete);
-                        audioAssetList.put(audioId, remoteAudioAsset);
+                        if (assetPath.endsWith(".m3u8")) {
+                            // HLS Stream - resolve immediately since it's a stream
+                            StreamAudioAsset streamAudioAsset = new StreamAudioAsset(this, audioId, uri, volume);
+                            audioAssetList.put(audioId, streamAudioAsset);
+                            call.resolve(status);
+                        } else {
+                            // Regular remote audio
+                            RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(this, audioId, uri, audioChannelNum, volume);
+                            remoteAudioAsset.setCompletionListener(this::dispatchComplete);
+                            audioAssetList.put(audioId, remoteAudioAsset);
+                            call.resolve(status);
+                        }
                     } else if (uri.getScheme() != null && uri.getScheme().equals("file")) {
                         // Local file URL
                         Log.d("AudioPlugin", "Debug: Local file URL detected");
@@ -582,10 +588,10 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                         AudioAsset asset = new AudioAsset(this, audioId, afd, audioChannelNum, volume);
                         asset.setCompletionListener(this::dispatchComplete);
                         audioAssetList.put(audioId, asset);
+                        call.resolve(status);
                     } else {
                         throw new IllegalArgumentException("Invalid URL scheme: " + uri.getScheme());
                     }
-                    call.resolve(status);
                 } catch (Exception e) {
                     Log.e("AudioPlugin", "Error handling URL", e);
                     call.reject("Error handling URL: " + e.getMessage());
@@ -616,29 +622,33 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
     private void playOrLoop(String action, final PluginCall call) {
         try {
-            initSoundPool();
-
             final String audioId = call.getString(ASSET_ID);
             final Double time = call.getDouble("time", 0.0);
+            Log.d(TAG, "Playing asset: " + audioId + ", action: " + action + ", assets count: " + audioAssetList.size());
+            
             if (audioAssetList.containsKey(audioId)) {
                 AudioAsset asset = audioAssetList.get(audioId);
-                if (LOOP.equals(action) && asset != null) {
-                    asset.loop();
-                    call.resolve();
-                } else if (asset != null) {
-                    if (fadeMusic) {
-                        asset.playWithFade(time);
+                Log.d(TAG, "Found asset: " + audioId + ", type: " + asset.getClass().getSimpleName());
+                
+                if (asset != null) {
+                    if (LOOP.equals(action)) {
+                        asset.loop();
                     } else {
-                        asset.play(time);
+                        if (fadeMusic) {
+                            asset.playWithFade(time);
+                        } else {
+                            asset.play(time);
+                        }
                     }
                     call.resolve();
                 } else {
-                    call.reject("Error with asset");
+                    call.reject("Asset is null: " + audioId);
                 }
             } else {
-                call.reject("Error with asset");
+                call.reject("Asset not found: " + audioId);
             }
         } catch (Exception ex) {
+            Log.e(TAG, "Error in playOrLoop", ex);
             call.reject(ex.getMessage());
         }
     }

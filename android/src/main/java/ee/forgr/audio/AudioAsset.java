@@ -4,6 +4,9 @@ import android.content.res.AssetFileDescriptor;
 import android.os.Build;
 import androidx.annotation.RequiresApi;
 import java.util.ArrayList;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 
 public class AudioAsset {
 
@@ -14,12 +17,18 @@ public class AudioAsset {
     protected final NativeAudio owner;
     protected AudioCompletionListener completionListener;
     protected String assetId;
+    private Handler currentTimeHandler;
+    private Runnable currentTimeRunnable;
+    private static final float FADE_STEP = 0.05f;
+    private static final int FADE_DELAY_MS = 80;
+    private float initialVolume;
 
     AudioAsset(NativeAudio owner, String assetId, AssetFileDescriptor assetFileDescriptor, int audioChannelNum, float volume)
         throws Exception {
         audioList = new ArrayList<>();
         this.owner = owner;
         this.assetId = assetId;
+        this.initialVolume = volume;
 
         if (audioChannelNum < 0) {
             audioChannelNum = 1;
@@ -38,11 +47,12 @@ public class AudioAsset {
 
     public void play(Double time) throws Exception {
         AudioDispatcher audio = audioList.get(playIndex);
-
         if (audio != null) {
             audio.play(time);
             playIndex++;
             playIndex = playIndex % audioList.size();
+            Log.d(TAG, "Starting timer from play");  // Debug log
+            startCurrentTimeUpdates();  // Make sure this is called
         } else {
             throw new Exception("AudioDispatcher is null");
         }
@@ -81,6 +91,7 @@ public class AudioAsset {
     }
 
     public boolean pause() throws Exception {
+        stopCurrentTimeUpdates();  // Stop updates when pausing
         boolean wasPlaying = false;
 
         for (int x = 0; x < audioList.size(); x++) {
@@ -94,9 +105,10 @@ public class AudioAsset {
     public void resume() throws Exception {
         if (!audioList.isEmpty()) {
             AudioDispatcher audio = audioList.get(0);
-
             if (audio != null) {
                 audio.resume();
+                Log.d(TAG, "Starting timer from resume");  // Debug log
+                startCurrentTimeUpdates();  // Make sure this is called
             } else {
                 throw new Exception("AudioDispatcher is null");
             }
@@ -104,6 +116,7 @@ public class AudioAsset {
     }
 
     public void stop() throws Exception {
+        stopCurrentTimeUpdates();  // Stop updates when stopping
         for (int x = 0; x < audioList.size(); x++) {
             AudioDispatcher audio = audioList.get(x);
 
@@ -117,11 +130,11 @@ public class AudioAsset {
 
     public void loop() throws Exception {
         AudioDispatcher audio = audioList.get(playIndex);
-
         if (audio != null) {
             audio.loop();
             playIndex++;
             playIndex = playIndex % audioList.size();
+            startCurrentTimeUpdates(); // Add timer start
         } else {
             throw new Exception("AudioDispatcher is null");
         }
@@ -183,5 +196,130 @@ public class AudioAsset {
 
     protected String getAssetId() {
         return assetId;
+    }
+
+    public void setCurrentTime(double time) throws Exception {
+        owner.getActivity().runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (audioList.size() != 1) {
+                    return;
+                }
+                AudioDispatcher audio = audioList.get(playIndex);
+                if (audio != null) {
+                    audio.setCurrentPosition(time);
+                }
+            }
+        });
+    }
+
+    protected void startCurrentTimeUpdates() {
+        Log.d(TAG, "Starting timer updates in AudioAsset");
+        if (currentTimeHandler == null) {
+            currentTimeHandler = new Handler(Looper.getMainLooper());
+        }
+        
+        // Add small delay to let audio start playing
+        currentTimeHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                startTimeUpdateLoop();
+            }
+        }, 100);  // 100ms delay
+    }
+
+    private void startTimeUpdateLoop() {
+        currentTimeRunnable = new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    AudioDispatcher audio = audioList.get(playIndex);
+                    if (audio != null && audio.isPlaying()) {
+                        double currentTime = getCurrentPosition();
+                        Log.d(TAG, "Timer update: currentTime = " + currentTime);
+                        owner.notifyCurrentTime(assetId, currentTime);
+                        currentTimeHandler.postDelayed(this, 100);
+                    } else {
+                        Log.d(TAG, "Stopping timer - not playing");
+                        stopCurrentTimeUpdates();
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error getting current time", e);
+                    stopCurrentTimeUpdates();
+                }
+            }
+        };
+        currentTimeHandler.post(currentTimeRunnable);
+    }
+
+    void stopCurrentTimeUpdates() {
+        Log.d(TAG, "Stopping timer updates in AudioAsset");
+        if (currentTimeHandler != null && currentTimeRunnable != null) {
+            currentTimeHandler.removeCallbacks(currentTimeRunnable);
+        }
+    }
+
+    public void playWithFade(Double time) throws Exception {
+        AudioDispatcher audio = audioList.get(playIndex);
+        if (audio != null) {
+            audio.setVolume(0);
+            audio.play(time);
+            fadeIn(audio);
+            startCurrentTimeUpdates();
+        }
+    }
+
+    private void fadeIn(final AudioDispatcher audio) {
+        final Handler handler = new Handler(Looper.getMainLooper());
+        final Runnable fadeRunnable = new Runnable() {
+            float currentVolume = 0;
+            @Override
+            public void run() {
+                if (currentVolume < initialVolume) {
+                    currentVolume += FADE_STEP;
+                    try {
+                        audio.setVolume(currentVolume);
+                        handler.postDelayed(this, FADE_DELAY_MS);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error during fade in", e);
+                    }
+                }
+            }
+        };
+        handler.post(fadeRunnable);
+    }
+
+    public void stopWithFade() throws Exception {
+        AudioDispatcher audio = audioList.get(playIndex);
+        if (audio != null && audio.isPlaying()) {
+            fadeOut(audio);
+        }
+    }
+
+    private void fadeOut(final AudioDispatcher audio) {
+        final Handler handler = new Handler(Looper.getMainLooper());
+        final Runnable fadeRunnable = new Runnable() {
+            float currentVolume = initialVolume;
+            @Override
+            public void run() {
+                if (currentVolume > FADE_STEP) {
+                    currentVolume -= FADE_STEP;
+                    try {
+                        audio.setVolume(currentVolume);
+                        handler.postDelayed(this, FADE_DELAY_MS);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error during fade out", e);
+                    }
+                } else {
+                    try {
+                        audio.setVolume(0);
+                        stop();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error stopping after fade", e);
+                    }
+                }
+            }
+        };
+        handler.post(fadeRunnable);
     }
 }

@@ -41,6 +41,9 @@ public class AudioDispatcher
                 .build()
         );
         mediaPlayer.setVolume(volume, volume);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            mediaPlayer.setPlaybackParams(mediaPlayer.getPlaybackParams().setSpeed(1.0f));
+        }
         mediaPlayer.prepare();
     }
 

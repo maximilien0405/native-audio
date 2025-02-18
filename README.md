@@ -30,7 +30,9 @@
 # Capacitor Native Audio Plugin
 
 Capacitor plugin for native audio engine.
-Capacitor V6 - ✅ Support!
+Capacitor V7 - ✅ Support!
+
+Support local file, remote URL, and m3u8 stream
 
 Click on video to see example 💥
 

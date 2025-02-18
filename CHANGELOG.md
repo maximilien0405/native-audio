@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [7.3.0](https://github.com/Cap-go/native-audio/compare/7.2.1...7.3.0) (2025-02-18)
+
+
+### Features
+
+* add event on android too ([c1d34ab](https://github.com/Cap-go/native-audio/commit/c1d34ab249a21bb8119fc295ff5884bc2016dfde))
+* addlistener currentTime ([836d157](https://github.com/Cap-go/native-audio/commit/836d1577ec5a87f45d50220bbb2f354cd6f21d82))
+
+
+### Bug Fixes
+
+* android build issue ([d50928c](https://github.com/Cap-go/native-audio/commit/d50928ccd1ef3892af49502072ec088604312eaf))
+* lint ([755bab5](https://github.com/Cap-go/native-audio/commit/755bab50b7561d4dd104d1539a64ba77b0f8fe73))
+* m3u8 methods ([f8f0d70](https://github.com/Cap-go/native-audio/commit/f8f0d705789476482fce776554421f4d0734ff5e))
+
 ### [7.2.1](https://github.com/Cap-go/native-audio/compare/7.2.0...7.2.1) (2025-02-18)
 
 

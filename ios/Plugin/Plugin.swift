@@ -31,7 +31,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         CAPPluginMethod(name: "setCurrentTime", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "clearCache", returnType: CAPPluginReturnPromise)
     ]
-    private let audioQueue = DispatchQueue(label: "ee.forgr.audio.queue", qos: .userInitiated)
+    internal let audioQueue = DispatchQueue(label: "ee.forgr.audio.queue", qos: .userInitiated, attributes: .concurrent)
     private var audioList: [String: Any] = [:] {
         didSet {
             // Ensure audioList modifications happen on audioQueue
@@ -166,18 +166,13 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         let time = call.getDouble("time") ?? 0
         let delay = call.getDouble("delay") ?? 0
 
-        if audioId.isEmpty {
-            call.reject(Constant.ErrorAssetId)
-            return
-        }
-
-        audioQueue.async {
-            guard !self.audioList.isEmpty else {
+        audioQueue.sync { [self] in  // Changed from async to sync for consistency
+            guard !audioList.isEmpty else {
                 call.reject("Audio list is empty")
                 return
             }
 
-            guard let asset = self.audioList[audioId] else {
+            guard let asset = audioList[audioId] else {
                 call.reject(Constant.ErrorAssetNotFound)
                 return
             }
@@ -201,29 +196,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     }
 
     @objc private func getAudioAsset(_ call: CAPPluginCall) -> AudioAsset? {
-        let audioId = call.getString(Constant.AssetIdKey) ?? ""
-        if audioId.isEmpty {
-            call.reject(Constant.ErrorAssetId)
-            return nil
-        }
-
         var asset: AudioAsset?
-        audioQueue.sync {
-            if self.audioList.isEmpty {
-                call.reject("Audio list is empty")
-                return
-            }
-
-            guard let foundAsset = self.audioList[audioId] as? AudioAsset else {
-                call.reject(Constant.ErrorAssetNotFound + " - " + audioId)
-                return
-            }
-            asset = foundAsset
-        }
-
-        if asset == nil {
-            call.reject("Failed to get audio asset")
-            return nil
+        audioQueue.sync { [self] in  // Read operation
+            asset = self.audioList[call.getString(Constant.AssetIdKey) ?? ""] as? AudioAsset
         }
         return asset
     }
@@ -388,12 +363,13 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
-    private func preloadAsset(_ call: CAPPluginCall, isComplex complex: Bool) {
+    @objc private func preloadAsset(_ call: CAPPluginCall, isComplex complex: Bool) {
         let audioId = call.getString(Constant.AssetIdKey) ?? ""
         let channels: Int?
         let volume: Float?
         let delay: Float?
         var isLocalUrl: Bool = call.getBool("isUrl") ?? false
+        
         if audioId == "" {
             call.reject(Constant.ErrorAssetId)
             return
@@ -405,23 +381,22 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             channels = call.getInt("channels") ?? 1
             delay = call.getFloat("delay") ?? 1.0
         } else {
-            channels = 0
-            volume = 0
-            delay = 0
+            channels = 1
+            volume = 1.0
+            delay = 0.0
             isLocalUrl = false
         }
 
-        if audioList.isEmpty {
-            audioList = [:]
-        }
+        audioQueue.sync(flags: .barrier) { [self] in
+            if audioList.isEmpty {
+                audioList = [:]
+            }
 
-        let asset = audioList[audioId]
-        let queue = DispatchQueue(label: "ee.forgr.audio.simple.queue", qos: .userInitiated)
-        if asset != nil {
-            call.reject(Constant.ErrorAssetAlreadyLoaded + " - " + audioId)
-            return
-        }
-        queue.async {
+            if audioList[audioId] != nil {
+                call.reject(Constant.ErrorAssetAlreadyLoaded + " - " + audioId)
+                return
+            }
+
             var basePath: String?
             if let url = URL(string: assetPath), url.scheme != nil {
                 // Handle remote URL
@@ -431,9 +406,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                 return
             } else if isLocalUrl == false {
                 // Handle public folder
-                // if assetPath doesnt start with public/ add it
                 assetPath = assetPath.starts(with: "public/") ? assetPath : "public/" + assetPath
-
                 let assetPathSplit = assetPath.components(separatedBy: ".")
                 basePath = Bundle.main.path(forResource: assetPathSplit[0], ofType: assetPathSplit[1])
             } else {
@@ -493,6 +466,16 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             audioAsset.playWithFade(time: audioAsset.getCurrentTime())
         } else {
             audioAsset.stop()
+        }
+    }
+
+    internal func executeOnAudioQueue(_ block: @escaping () -> Void) {
+        if DispatchQueue.getSpecific(key: queueKey) != nil {
+            block()  // Already on queue
+        } else {
+            audioQueue.sync(flags: .barrier) {
+                block()
+            }
         }
     }
 }

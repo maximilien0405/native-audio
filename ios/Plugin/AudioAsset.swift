@@ -25,65 +25,81 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
         self.owner = owner
         self.assetId = assetId
         self.channels = []
+        self.initialVolume = volume ?? 1.0
 
         super.init()
 
         let pathUrl: URL = URL(string: path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!)!
-        for _ in 0..<channels {
-            do {
-                let player: AVAudioPlayer! = try AVAudioPlayer(contentsOf: pathUrl)
-                player.delegate = owner
-
-                if player != nil {
-                    player.enableRate = true
-                    player.volume = volume
-                    player.prepareToPlay()
-                    self.channels.append(player)
-                    if channels == 1 {
-                        player.delegate = self
+        
+        owner.executeOnAudioQueue { [self] in
+            for _ in 0..<channels {
+                do {
+                    let player: AVAudioPlayer! = try AVAudioPlayer(contentsOf: pathUrl)
+                    player.delegate = self
+                    if player != nil {
+                        player.enableRate = true
+                        player.volume = volume
+                        player.rate = 1.0
+                        player.prepareToPlay()
+                        self.channels.append(player)
                     }
+                } catch let error as NSError {
+                    print(error.debugDescription)
+                    print("Error loading \(String(describing: path))")
                 }
-            } catch let error as NSError {
-                print(error.debugDescription)
-                print("Error loading \(String(describing: path))")
             }
         }
     }
 
     func getCurrentTime() -> TimeInterval {
-        if channels.count != 1 {
-            return 0
+        var result: TimeInterval = 0
+        owner.executeOnAudioQueue { [self] in
+            if channels.count != 1 {
+                result = 0
+                return
+            }
+            let player: AVAudioPlayer = channels[playIndex]
+            result = player.currentTime
         }
-        let player: AVAudioPlayer = channels[playIndex]
-
-        return player.currentTime
+        return result
     }
 
     func setCurrentTime(time: TimeInterval) {
-        if channels.count != 1 {
-            return
+        owner.executeOnAudioQueue { [self] in
+            if channels.count != 1 {
+                return
+            }
+            let player: AVAudioPlayer = channels[playIndex]
+            player.currentTime = time
         }
-
-        let player: AVAudioPlayer = channels[playIndex]
-
-        player.currentTime = time
     }
 
     func getDuration() -> TimeInterval {
-        if channels.count != 1 {
-            return 0
+        var result: TimeInterval = 0
+        owner.executeOnAudioQueue { [self] in
+            if channels.count != 1 {
+                result = 0
+                return
+            }
+            let player: AVAudioPlayer = channels[playIndex]
+            result = player.duration
         }
-
-        let player: AVAudioPlayer = channels[playIndex]
-
-        return player.duration
+        return result
     }
 
     func play(time: TimeInterval, delay: TimeInterval) {
-        let player: AVAudioPlayer
-
-        if channels.count > 0 {
-            player = channels[playIndex]
+        owner.executeOnAudioQueue { [self] in
+            guard !channels.isEmpty else {
+                NSLog("No channels available")
+                return
+            }
+            guard playIndex < channels.count else {
+                NSLog("PlayIndex out of bounds")
+                playIndex = 0
+                return
+            }
+            
+            let player = channels[playIndex]
             player.currentTime = time
             player.numberOfLoops = 0
             if delay > 0 {
@@ -97,96 +113,118 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
     }
 
     func playWithFade(time: TimeInterval) {
-        let player: AVAudioPlayer = channels[playIndex]
-        player.currentTime = time
+        owner.executeOnAudioQueue { [self] in
+            guard !channels.isEmpty else {
+                NSLog("No channels available")
+                return
+            }
+            guard playIndex < channels.count else {
+                NSLog("PlayIndex out of bounds")
+                playIndex = 0
+                return
+            }
+            
+            let player: AVAudioPlayer = channels[playIndex]
+            player.currentTime = time
 
-        if !player.isPlaying {
-            player.numberOfLoops = 0
-            player.volume = 0
-            player.play()
-            playIndex += 1
-            playIndex = playIndex % channels.count
-        } else {
-            if player.volume < initialVolume {
-                player.volume += self.FADESTEP
+            if !player.isPlaying {
+                player.numberOfLoops = 0
+                player.volume = initialVolume
+                player.play()
+                playIndex += 1
+                playIndex = playIndex % channels.count
+            } else {
+                if player.volume < initialVolume {
+                    player.volume += self.FADESTEP
+                }
             }
         }
-
     }
 
     func pause() {
-        let player: AVAudioPlayer = channels[playIndex]
-        player.pause()
+        owner.executeOnAudioQueue { [self] in
+            let player: AVAudioPlayer = channels[playIndex]
+            player.pause()
+        }
     }
 
     func resume() {
-        let player: AVAudioPlayer = channels[playIndex]
-
-        let timeOffset = player.deviceCurrentTime + 0.01
-        player.play(atTime: timeOffset)
+        owner.executeOnAudioQueue { [self] in
+            let player: AVAudioPlayer = channels[playIndex]
+            let timeOffset = player.deviceCurrentTime + 0.01
+            player.play(atTime: timeOffset)
+        }
     }
 
     func stop() {
-        for player in channels {
-            player.stop()
+        owner.executeOnAudioQueue { [self] in
+            for player in channels {
+                player.stop()
+            }
         }
     }
 
     func stopWithFade() {
-        let player: AVAudioPlayer = channels[playIndex]
+        owner.executeOnAudioQueue { [self] in
+            let player: AVAudioPlayer = channels[playIndex]
 
-        if !player.isPlaying {
-            player.currentTime = 0.0
-            player.numberOfLoops = 0
-            player.volume = 0
-            player.play()
-            playIndex += 1
-            playIndex = playIndex % channels.count
-        } else {
-            if player.volume < initialVolume {
-                player.volume += self.FADESTEP
+            if !player.isPlaying {
+                player.currentTime = 0.0
+                player.numberOfLoops = 0
+                player.volume = 0
+                player.play()
+                playIndex += 1
+                playIndex = playIndex % channels.count
+            } else {
+                if player.volume < initialVolume {
+                    player.volume += self.FADESTEP
+                }
             }
         }
     }
 
     func loop() {
-        self.stop()
-
-        let player: AVAudioPlayer = channels[playIndex]
-        player.numberOfLoops = -1
-        player.play()
-        playIndex += 1
-        playIndex = playIndex % channels.count
+        owner.executeOnAudioQueue { [self] in
+            self.stop()
+            let player: AVAudioPlayer = channels[playIndex]
+            player.delegate = self
+            player.numberOfLoops = -1
+            player.play()
+            playIndex += 1
+            playIndex = playIndex % channels.count
+        }
     }
 
     func unload() {
-        self.stop()
-
-        //        for i in 0..<channels.count {
-        //            var player: AVAudioPlayer! = channels.object(at: i) as? AVAudioPlayer
-        //
-        //            player = nil
-        //        }
-        channels = []
+        owner.executeOnAudioQueue { [self] in
+            self.stop()
+            channels = []
+        }
     }
 
     func setVolume(volume: NSNumber!) {
-        for player in channels {
-            player.volume = volume.floatValue
+        owner.executeOnAudioQueue { [self] in
+            for player in channels {
+                player.volume = volume.floatValue
+            }
         }
     }
 
     func setRate(rate: NSNumber!) {
-        for player in channels {
-            player.rate = rate.floatValue
+        owner.executeOnAudioQueue { [self] in
+            for player in channels {
+                player.rate = rate.floatValue
+            }
         }
     }
 
     public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        NSLog("playerDidFinish")
-        self.owner.notifyListeners("complete", data: [
-            "assetId": self.assetId
-        ])
+        owner.executeOnAudioQueue { [self] in
+            NSLog("playerDidFinish")
+            self.owner.notifyListeners("complete", data: [
+                "assetId": self.assetId
+            ])
+        }
     }
 
     func playerDecodeError(player: AVAudioPlayer!, error: NSError!) {
@@ -194,11 +232,15 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
     }
 
     func isPlaying() -> Bool {
-        if channels.count != 1 {
-            return false
+        var result: Bool = false
+        owner.executeOnAudioQueue { [self] in
+            if channels.count != 1 {
+                result = false
+                return
+            }
+            let player: AVAudioPlayer = channels[playIndex]
+            result = player.isPlaying
         }
-
-        let player: AVAudioPlayer = channels[playIndex]
-        return player.isPlaying
+        return result
     }
 }

@@ -49,6 +49,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         self.fadeMusic = false
 
         do {
+            try self.session.setActive(true)
             try self.session.setCategory(AVAudioSession.Category.playback, options: .mixWithOthers)
             try self.session.setActive(false)
         } catch {
@@ -64,8 +65,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         let focus = call.getBool(Constant.FocusAudio) ?? false
         do {
             if focus {
+                try self.session.setActive(true)
                 try self.session.setCategory(AVAudioSession.Category.playback, options: .duckOthers)
-
+                try self.session.setActive(false)
             }
 
         } catch {
@@ -101,14 +103,14 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                     do {
 
                         if focus {
-
+                            try self.session.setActive(true)
                             try self.session.setCategory(AVAudioSession.Category.ambient, options: .duckOthers)
-
+                            try self.session.setActive(false)
                         } else {
-
+                            try self.session.setActive(true)
                             try self.session.setCategory(
                                 AVAudioSession.Category.ambient, options: .mixWithOthers)
-
+                            try self.session.setActive(false)
                         }
 
                     } catch {

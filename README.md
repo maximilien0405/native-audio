@@ -541,12 +541,12 @@ Clear the audio cache for remote audio files
 
 #### ConfigureOptions
 
-| Prop               | Type                 | Description                                             |
-| ------------------ | -------------------- | ------------------------------------------------------- |
-| **`fade`**         | <code>boolean</code> | Play the audio with Fade effect, only available for IOS |
-| **`focus`**        | <code>boolean</code> | focus the audio with Audio Focus                        |
-| **`background`**   | <code>boolean</code> | Play the audio in the background                        |
-| **`ignoreSilent`** | <code>boolean</code> | Ignore silent mode,                                     |
+| Prop               | Type                 | Description                                                                   |
+| ------------------ | -------------------- | ----------------------------------------------------------------------------- |
+| **`fade`**         | <code>boolean</code> | Play the audio with Fade effect, only available for IOS                       |
+| **`focus`**        | <code>boolean</code> | focus the audio with Audio Focus                                              |
+| **`background`**   | <code>boolean</code> | Play the audio in the background                                              |
+| **`ignoreSilent`** | <code>boolean</code> | Ignore silent mode, works only on iOS setting this will nuke other audio apps |
 
 
 #### PreloadOptions

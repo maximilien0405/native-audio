@@ -17,7 +17,7 @@
   "author": "Martin Donadieu",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Cap-go/native-audio"
+    "url": "git+https://github.com/Cap-go/native-audio.git"
   },
   "bugs": {
     "url": "https://github.com/Cap-go/native-audio/issues"

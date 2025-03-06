@@ -65,6 +65,10 @@ export interface ConfigureOptions {
    * Play the audio in the background
    */
   background?: boolean;
+  /**
+   * Ignore silent mode, 
+   */
+  ignoreSilent?: boolean;
 }
 
 export interface PreloadOptions {

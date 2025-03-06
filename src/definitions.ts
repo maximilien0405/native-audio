@@ -66,7 +66,7 @@ export interface ConfigureOptions {
    */
   background?: boolean;
   /**
-   * Ignore silent mode, 
+   * Ignore silent mode, works only on iOS setting this will nuke other audio apps
    */
   ignoreSilent?: boolean;
 }

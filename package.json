@@ -17,10 +17,10 @@
   "author": "Martin Donadieu",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Cap-go/native-audio.git"
+    "url": "git+https://github.com/Cap-go/capacitor-native-audio.git"
   },
   "bugs": {
-    "url": "https://github.com/Cap-go/native-audio/issues"
+    "url": "https://github.com/Cap-go/capacitor-native-audio/native-audio/issues"
   },
   "keywords": [
     "capacitor",

@@ -8,6 +8,10 @@
 
 import AVFoundation
 
+/**
+ * AudioAsset class handles local audio playback via AVAudioPlayer
+ * Supports volume control, fade effects, rate changes, and looping
+ */
 public class AudioAsset: NSObject, AVAudioPlayerDelegate {
 
     var channels: [AVAudioPlayer] = []
@@ -15,159 +19,266 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
     var assetId: String = ""
     var initialVolume: Float = 1.0
     var fadeDelay: Float = 1.0
-    var owner: NativeAudio
+    weak var owner: NativeAudio?
 
+    // Constants for fade effect
     let FADESTEP: Float = 0.05
     let FADEDELAY: Float = 0.08
 
-    private var currentTimeTimer: Timer?
+    // Maximum number of channels to prevent excessive resource usage
+    private let MAX_CHANNELS = Constant.MaxChannels
 
+    private var currentTimeTimer: Timer?
+    internal var fadeTimer: Timer?
+
+    /**
+     * Initialize a new audio asset
+     * - Parameters:
+     *   - owner: The plugin that owns this asset
+     *   - assetId: Unique identifier for this asset
+     *   - path: File path to the audio file
+     *   - channels: Number of simultaneous playback channels (polyphony)
+     *   - volume: Initial volume (0.0-1.0)
+     *   - delay: Fade delay in seconds
+     */
     init(owner: NativeAudio, withAssetId assetId: String, withPath path: String!, withChannels channels: Int!, withVolume volume: Float!, withFadeDelay delay: Float!) {
 
         self.owner = owner
         self.assetId = assetId
         self.channels = []
-        self.initialVolume = volume ?? 1.0
+        self.initialVolume = min(max(volume ?? Constant.DefaultVolume, Constant.MinVolume), Constant.MaxVolume) // Validate volume range
+        self.fadeDelay = max(delay ?? Constant.DefaultFadeDelay, 0.0) // Ensure non-negative delay
 
         super.init()
 
-        let pathUrl: URL = URL(string: path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!)!
+        guard let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            print("Failed to encode path: \(String(describing: path))")
+            return
+        }
+
+        // Try to create URL from string first, fall back to file URL if that fails
+        let pathUrl: URL
+        if let url = URL(string: encodedPath) {
+            pathUrl = url
+        } else {
+            pathUrl = URL(fileURLWithPath: encodedPath)
+        }
+
+        // Limit channels to a reasonable maximum to prevent resource issues
+        let channelCount = min(max(channels ?? 1, 1), MAX_CHANNELS)
 
         owner.executeOnAudioQueue { [self] in
-            for _ in 0..<channels {
+            for _ in 0..<channelCount {
                 do {
-                    let player: AVAudioPlayer! = try AVAudioPlayer(contentsOf: pathUrl)
+                    let player = try AVAudioPlayer(contentsOf: pathUrl)
                     player.delegate = self
-                    if player != nil {
-                        player.enableRate = true
-                        player.volume = volume
-                        player.rate = 1.0
-                        player.prepareToPlay()
-                        self.channels.append(player)
-                    }
-                } catch let error as NSError {
-                    print(error.debugDescription)
-                    print("Error loading \(String(describing: path))")
+                    player.enableRate = true
+                    player.volume = self.initialVolume
+                    player.rate = 1.0
+                    player.prepareToPlay()
+                    self.channels.append(player)
+                } catch {
+                    print("Error loading audio file: \(error.localizedDescription)")
+                    print("Path: \(String(describing: path))")
                 }
             }
         }
     }
 
+    deinit {
+        stopCurrentTimeUpdates()
+        stopFadeTimer()
+        // Clean up any players that might still be playing
+        for player in channels {
+            if player.isPlaying {
+                player.stop()
+            }
+        }
+    }
+
+    /**
+     * Get the current playback time
+     * - Returns: Current time in seconds
+     */
     func getCurrentTime() -> TimeInterval {
         var result: TimeInterval = 0
-        owner.executeOnAudioQueue { [self] in
-            if channels.count != 1 {
+        owner?.executeOnAudioQueue { [self] in
+            if channels.isEmpty || playIndex >= channels.count {
                 result = 0
                 return
             }
-            let player: AVAudioPlayer = channels[playIndex]
+            let player = channels[playIndex]
             result = player.currentTime
         }
         return result
     }
 
+    /**
+     * Set the current playback time
+     * - Parameter time: Time in seconds
+     */
     func setCurrentTime(time: TimeInterval) {
-        owner.executeOnAudioQueue { [self] in
-            if channels.count != 1 {
+        owner?.executeOnAudioQueue { [self] in
+            if channels.isEmpty || playIndex >= channels.count {
                 return
             }
-            let player: AVAudioPlayer = channels[playIndex]
-            player.currentTime = time
+            let player = channels[playIndex]
+            // Ensure time is valid
+            let validTime = min(max(time, 0), player.duration)
+            player.currentTime = validTime
         }
     }
 
+    /**
+     * Get the total duration of the audio file
+     * - Returns: Duration in seconds
+     */
     func getDuration() -> TimeInterval {
         var result: TimeInterval = 0
-        owner.executeOnAudioQueue { [self] in
-            if channels.count != 1 {
+        owner?.executeOnAudioQueue { [self] in
+            if channels.isEmpty || playIndex >= channels.count {
                 result = 0
                 return
             }
-            let player: AVAudioPlayer = channels[playIndex]
+            let player = channels[playIndex]
             result = player.duration
         }
         return result
     }
 
+    /**
+     * Play the audio from the specified time with optional delay
+     * - Parameters:
+     *   - time: Start time in seconds
+     *   - delay: Delay before playback in seconds
+     */
     func play(time: TimeInterval, delay: TimeInterval) {
-        owner.executeOnAudioQueue { [self] in
-            guard !channels.isEmpty else {
-                NSLog("No channels available")
-                return
-            }
-            guard playIndex < channels.count else {
-                NSLog("PlayIndex out of bounds")
+        owner?.executeOnAudioQueue { [self] in
+            guard !channels.isEmpty else { return }
+
+            // Reset play index if it's out of bounds
+            if playIndex >= channels.count {
                 playIndex = 0
-                return
             }
 
             let player = channels[playIndex]
-            player.currentTime = time
+            // Ensure time is within valid range
+            let validTime = min(max(time, 0), player.duration)
+            player.currentTime = validTime
             player.numberOfLoops = 0
-            if delay > 0 {
-                player.play(atTime: player.deviceCurrentTime + delay)
+
+            // Use a valid delay (non-negative)
+            let validDelay = max(delay, 0)
+
+            if validDelay > 0 {
+                player.play(atTime: player.deviceCurrentTime + validDelay)
             } else {
                 player.play()
             }
-            playIndex += 1
-            playIndex = playIndex % channels.count
-            NSLog("About to start timer updates")
+            playIndex = (playIndex + 1) % channels.count
             startCurrentTimeUpdates()
         }
     }
 
     func playWithFade(time: TimeInterval) {
-        owner.executeOnAudioQueue { [self] in
-            guard !channels.isEmpty else {
-                NSLog("No channels available")
-                return
-            }
-            guard playIndex < channels.count else {
-                NSLog("PlayIndex out of bounds")
+        owner?.executeOnAudioQueue { [self] in
+            guard !channels.isEmpty else { return }
+
+            // Reset play index if it's out of bounds
+            if playIndex >= channels.count {
                 playIndex = 0
-                return
             }
 
-            let player: AVAudioPlayer = channels[playIndex]
+            let player = channels[playIndex]
             player.currentTime = time
 
             if !player.isPlaying {
                 player.numberOfLoops = 0
-                player.volume = initialVolume
+                player.volume = 0 // Start with volume at 0
                 player.play()
-                playIndex += 1
-                playIndex = playIndex % channels.count
-                NSLog("PlayWithFade: About to start timer updates")
+                playIndex = (playIndex + 1) % channels.count
                 startCurrentTimeUpdates()
+
+                // Start fade-in
+                startVolumeRamp(from: 0, to: initialVolume, player: player)
             } else {
                 if player.volume < initialVolume {
-                    player.volume += self.FADESTEP
+                    // Continue fade-in if already in progress
+                    startVolumeRamp(from: player.volume, to: initialVolume, player: player)
                 }
             }
         }
     }
 
+    private func startVolumeRamp(from startVolume: Float, to endVolume: Float, player: AVAudioPlayer) {
+        stopFadeTimer()
+
+        let steps = abs(endVolume - startVolume) / FADESTEP
+        guard steps > 0 else { return }
+
+        let timeInterval = FADEDELAY / steps
+        var currentStep = 0
+        let totalSteps = Int(ceil(steps))
+
+        player.volume = startVolume
+
+        fadeTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(timeInterval), repeats: true) { [weak self, weak player] timer in
+            guard let strongSelf = self, let strongPlayer = player else {
+                timer.invalidate()
+                return
+            }
+
+            currentStep += 1
+            let progress = Float(currentStep) / Float(totalSteps)
+            let newVolume = startVolume + progress * (endVolume - startVolume)
+
+            strongPlayer.volume = newVolume
+
+            if currentStep >= totalSteps {
+                strongPlayer.volume = endVolume
+                timer.invalidate()
+                strongSelf.fadeTimer = nil
+            }
+        }
+        RunLoop.current.add(fadeTimer!, forMode: .common)
+    }
+
+    internal func stopFadeTimer() {
+        DispatchQueue.main.async { [weak self] in
+            self?.fadeTimer?.invalidate()
+            self?.fadeTimer = nil
+        }
+    }
+
     func pause() {
-        owner.executeOnAudioQueue { [self] in
+        owner?.executeOnAudioQueue { [self] in
             stopCurrentTimeUpdates()
-            let player: AVAudioPlayer = channels[playIndex]
+
+            // Check for valid playIndex
+            guard !channels.isEmpty && playIndex < channels.count else { return }
+
+            let player = channels[playIndex]
             player.pause()
         }
     }
 
     func resume() {
-        owner.executeOnAudioQueue { [self] in
-            let player: AVAudioPlayer = channels[playIndex]
+        owner?.executeOnAudioQueue { [self] in
+            // Check for valid playIndex
+            guard !channels.isEmpty && playIndex < channels.count else { return }
+
+            let player = channels[playIndex]
             let timeOffset = player.deviceCurrentTime + 0.01
             player.play(atTime: timeOffset)
-            NSLog("Resume: About to start timer updates")
             startCurrentTimeUpdates()
         }
     }
 
     func stop() {
-        owner.executeOnAudioQueue { [self] in
+        owner?.executeOnAudioQueue { [self] in
             stopCurrentTimeUpdates()
+            stopFadeTimer()
+
             for player in channels {
                 if player.isPlaying {
                     player.stop()
@@ -180,124 +291,131 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
     }
 
     func stopWithFade() {
-        owner.executeOnAudioQueue { [self] in
-            let player: AVAudioPlayer = channels[playIndex]
-            if player.isPlaying {
-                if player.volume > self.FADESTEP {
-                    player.volume -= self.FADESTEP
-                    // Schedule next fade step
-                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(self.FADEDELAY * 1000))) { [weak self] in
-                        self?.stopWithFade()
+        // Store current player locally to avoid race conditions with playIndex
+        owner?.executeOnAudioQueue { [self] in
+            guard !channels.isEmpty && playIndex < channels.count else {
+                stop()
+                return
+            }
+
+            let player = channels[playIndex]
+            if player.isPlaying && player.volume > 0 {
+                startVolumeRamp(from: player.volume, to: 0, player: player)
+
+                // Schedule the stop when fade is complete
+                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(Int(FADEDELAY * 1000))) { [weak self, weak player] in
+                    guard let strongSelf = self, let strongPlayer = player else { return }
+
+                    if strongPlayer.volume < strongSelf.FADESTEP {
+                        strongSelf.stop()
                     }
-                } else {
-                    // Volume is near 0, actually stop
-                    player.volume = 0
-                    self.stop()
                 }
+            } else {
+                stop()
             }
         }
     }
 
     func loop() {
-        owner.executeOnAudioQueue { [self] in
+        owner?.executeOnAudioQueue { [self] in
             self.stop()
-            let player: AVAudioPlayer = channels[playIndex]
+
+            guard !channels.isEmpty && playIndex < channels.count else { return }
+
+            let player = channels[playIndex]
             player.delegate = self
             player.numberOfLoops = -1
             player.play()
-            playIndex += 1
-            playIndex = playIndex % channels.count
-            NSLog("Loop: About to start timer updates")
+            playIndex = (playIndex + 1) % channels.count
             startCurrentTimeUpdates()
         }
     }
 
     func unload() {
-        owner.executeOnAudioQueue { [self] in
+        owner?.executeOnAudioQueue { [self] in
             self.stop()
+            stopCurrentTimeUpdates()
+            stopFadeTimer()
             channels = []
         }
     }
 
+    /**
+     * Set the volume for all audio channels
+     * - Parameter volume: Volume level (0.0-1.0)
+     */
     func setVolume(volume: NSNumber!) {
-        owner.executeOnAudioQueue { [self] in
+        owner?.executeOnAudioQueue { [self] in
+            // Ensure volume is in valid range
+            let validVolume = min(max(volume.floatValue, Constant.MinVolume), Constant.MaxVolume)
             for player in channels {
-                player.volume = volume.floatValue
+                player.volume = validVolume
             }
         }
     }
 
+    /**
+     * Set the playback rate for all audio channels
+     * - Parameter rate: Playback rate (0.5-2.0 is typical range)
+     */
     func setRate(rate: NSNumber!) {
-        owner.executeOnAudioQueue { [self] in
+        owner?.executeOnAudioQueue { [self] in
+            // Ensure rate is in valid range
+            let validRate = min(max(rate.floatValue, Constant.MinRate), Constant.MaxRate)
             for player in channels {
-                player.rate = rate.floatValue
+                player.rate = validRate
             }
         }
     }
 
     public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        owner.executeOnAudioQueue { [self] in
-            NSLog("playerDidFinish")
-            self.owner.notifyListeners("complete", data: [
+        owner?.executeOnAudioQueue { [self] in
+            self.owner?.notifyListeners("complete", data: [
                 "assetId": self.assetId
             ])
         }
     }
 
     func playerDecodeError(player: AVAudioPlayer!, error: NSError!) {
-
+        if let error = error {
+            print("AudioAsset decode error: \(error.localizedDescription)")
+        }
     }
 
     func isPlaying() -> Bool {
         var result: Bool = false
-        owner.executeOnAudioQueue { [self] in
-            if channels.count != 1 {
+        owner?.executeOnAudioQueue { [self] in
+            if channels.isEmpty || playIndex >= channels.count {
                 result = false
                 return
             }
-            let player: AVAudioPlayer = channels[playIndex]
+            let player = channels[playIndex]
             result = player.isPlaying
         }
         return result
     }
 
     internal func startCurrentTimeUpdates() {
-        NSLog("Starting timer updates")
         DispatchQueue.main.async { [weak self] in
-            guard let self = self else {
-                NSLog("Self is nil in timer start")
-                return
-            }
+            guard let strongSelf = self else { return }
 
-            self.currentTimeTimer?.invalidate()
-            self.currentTimeTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                guard let self = self else {
-                    NSLog("Self is nil in timer callback")
+            strongSelf.stopCurrentTimeUpdates() // Ensure no duplicate timers
+
+            strongSelf.currentTimeTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                guard let strongSelf = self, let strongOwner = strongSelf.owner else {
+                    self?.stopCurrentTimeUpdates()
                     return
                 }
 
-                var shouldNotify = false
-                var currentTime: TimeInterval = 0
-
-                self.owner.executeOnAudioQueue {
-                    shouldNotify = self.isPlaying()
-                    NSLog("isPlaying returned: \(shouldNotify)")
-                    if shouldNotify {
-                        currentTime = self.getCurrentTime()
-                        NSLog("getCurrentTime returned: \(currentTime)")
-                    }
-                }
-
-                if shouldNotify {
-                    NSLog("Calling notifyCurrentTime")
-                    self.owner.notifyCurrentTime(self)
+                if strongSelf.isPlaying() {
+                    strongOwner.notifyCurrentTime(strongSelf)
                 } else {
-                    NSLog("Stopping timer - not playing")
-                    self.stopCurrentTimeUpdates()
+                    strongSelf.stopCurrentTimeUpdates()
                 }
             }
-            RunLoop.current.add(self.currentTimeTimer!, forMode: .common)
-            NSLog("Timer added to RunLoop")
+            if let timer = strongSelf.currentTimeTimer {
+                RunLoop.current.add(timer, forMode: .common)
+            }
         }
     }
 

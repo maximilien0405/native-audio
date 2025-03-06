@@ -602,3 +602,21 @@ Clear the audio cache for remote audio files
 <code>(state: <a href="#currenttimeevent">CurrentTimeEvent</a>): void</code>
 
 </docgen-api>
+
+## Development and Testing
+
+### Building
+
+```bash
+npm run build
+```
+
+### Testing
+
+This plugin includes a comprehensive test suite for iOS:
+
+1. Open the iOS project in Xcode: `npx cap open ios`
+2. Navigate to the `PluginTests` directory
+3. Run tests using Product > Test (⌘+U)
+
+The tests cover core functionality including audio asset initialization, playback, volume control, fade effects, and more. See the [test documentation](ios/PluginTests/README.md) for more details.

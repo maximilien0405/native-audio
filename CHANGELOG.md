@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [7.3.9](https://github.com/Cap-go/capacitor-native-audio/compare/7.3.8...7.3.9) (2025-03-06)
+
+
+### Bug Fixes
+
+* issues ([d8c8cdd](https://github.com/Cap-go/capacitor-native-audio/commit/d8c8cdd46582b87d6ea7c7c09e3baed448e2bbcc))
+* release ([a8cde5c](https://github.com/Cap-go/capacitor-native-audio/commit/a8cde5cb69acb98cb720dac858d2d2094012dc97))
+
 ### [7.3.8](https://github.com/Cap-go/native-audio/compare/7.3.7...7.3.8) (2025-03-06)
 
 

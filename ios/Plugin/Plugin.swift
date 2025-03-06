@@ -83,9 +83,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     private func setupAudioSession() {
         do {
+            // Only set the category without immediately activating/deactivating
             try self.session.setCategory(AVAudioSession.Category.playback, options: .mixWithOthers)
-            try self.session.setActive(true)
-            try self.session.setActive(false)
+            // Don't activate/deactivate in setup - we'll do this explicitly when needed
         } catch {
             print("Failed to setup audio session: \(error)")
         }
@@ -135,8 +135,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
         // Use a single audio session configuration block for better atomicity
         do {
-            try self.session.setActive(true)
-
+            // Set category first
             if focus {
                 try self.session.setCategory(AVAudioSession.Category.playback, options: .duckOthers)
             } else if !ignoreSilent {
@@ -144,9 +143,10 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             } else {
                 try self.session.setCategory(AVAudioSession.Category.playback, options: .mixWithOthers)
             }
-
-            if !background {
-                try self.session.setActive(false)
+            
+            // Only activate if needed (background mode)
+            if background {
+                try self.session.setActive(true)
             }
 
         } catch {
@@ -175,7 +175,10 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     func activateSession() {
         do {
-            try self.session.setActive(true)
+            // Only activate if not already active
+            if !session.isOtherAudioPlaying {
+                try self.session.setActive(true)
+            }
         } catch {
             print("Failed to set session active: \(error)")
         }
@@ -183,14 +186,45 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     func endSession() {
         do {
-            try self.session.setActive(false, options: .notifyOthersOnDeactivation)
+            // Check if any audio assets are still playing before deactivating
+            let hasPlayingAssets = audioQueue.sync {
+                return self.audioList.values.contains { asset in
+                    if let audioAsset = asset as? AudioAsset {
+                        return audioAsset.isPlaying()
+                    }
+                    return false
+                }
+            }
+            
+            // Only deactivate if no assets are playing
+            if !hasPlayingAssets {
+                try self.session.setActive(false, options: .notifyOthersOnDeactivation)
+            }
         } catch {
             print("Failed to deactivate audio session: \(error)")
         }
     }
 
     public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        self.endSession()
+        // Don't immediately end the session here, as other players might still be active
+        // Instead, check if all players are done
+        audioQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Avoid recursive calls by checking if the asset is still in the list
+            let hasPlayingAssets = self.audioList.values.contains { asset in
+                if let audioAsset = asset as? AudioAsset {
+                    // Check if the asset has any playing channels other than the one that just finished
+                    return audioAsset.channels.contains { $0 != player && $0.isPlaying }
+                }
+                return false
+            }
+            
+            // Only end the session if no more assets are playing
+            if !hasPlayingAssets {
+                self.endSession()
+            }
+        }
     }
 
     @objc func play(_ call: CAPPluginCall) {

@@ -153,6 +153,9 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
      *   - delay: Delay before playback in seconds
      */
     func play(time: TimeInterval, delay: TimeInterval) {
+        stopCurrentTimeUpdates()
+        stopFadeTimer()
+
         owner?.executeOnAudioQueue { [self] in
             guard !channels.isEmpty else { return }
 
@@ -160,6 +163,9 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
             if playIndex >= channels.count {
                 playIndex = 0
             }
+
+            // Ensure the audio session is active before playing
+            owner?.activateSession()
 
             let player = channels[playIndex]
             // Ensure time is within valid range
@@ -175,6 +181,7 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
             } else {
                 player.play()
             }
+            
             playIndex = (playIndex + 1) % channels.count
             startCurrentTimeUpdates()
         }
@@ -368,11 +375,18 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
         }
     }
 
+    /**
+     * AVAudioPlayerDelegate method called when playback finishes
+     */
     public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         owner?.executeOnAudioQueue { [self] in
             self.owner?.notifyListeners("complete", data: [
                 "assetId": self.assetId
             ])
+            
+            // Notify the owner that this player finished
+            // The owner will check if any other assets are still playing
+            owner?.audioPlayerDidFinishPlaying(player, successfully: flag)
         }
     }
 

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [7.3.12](https://github.com/Cap-go/capacitor-native-audio/compare/7.3.11...7.3.12) (2025-03-21)
+
+
+### Bug Fixes
+
+* deinit for AudioAsset ([61d615b](https://github.com/Cap-go/capacitor-native-audio/commit/61d615b90927874a3b4d8ecac713fbbdd6c43953))
+
 ### [7.3.11](https://github.com/Cap-go/capacitor-native-audio/compare/7.3.10...7.3.11) (2025-03-06)
 
 

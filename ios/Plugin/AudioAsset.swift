@@ -86,14 +86,19 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
     }
 
     deinit {
-        stopCurrentTimeUpdates()
-        stopFadeTimer()
+        currentTimeTimer?.invalidate()
+        currentTimeTimer = nil
+        
+        fadeTimer?.invalidate()
+        fadeTimer = nil
+        
         // Clean up any players that might still be playing
         for player in channels {
             if player.isPlaying {
                 player.stop()
             }
         }
+        channels = []
     }
 
     /**

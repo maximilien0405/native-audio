@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [7.3.15](https://github.com/Cap-go/capacitor-native-audio/compare/7.3.14...7.3.15) (2025-04-07)
+
+
+### Bug Fixes
+
+* **deps:** update dependency androidx.media3:media3-exoplayer to v1.6.0 ([#153](https://github.com/Cap-go/capacitor-native-audio/issues/153)) ([5978af4](https://github.com/Cap-go/capacitor-native-audio/commit/5978af4f958758d9f92e8ec64dde4df9ee6d05b6))
+
 ### [7.3.14](https://github.com/Cap-go/capacitor-native-audio/compare/7.3.13...7.3.14) (2025-03-31)
 
 

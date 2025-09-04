@@ -121,7 +121,6 @@ public class RemoteAudioAsset extends AudioAsset {
                             owner.notifyDurationAvailable(assetId, durationSec);
                         }
                     } else if (playbackState == Player.STATE_ENDED) {
-                        owner.dispatchComplete(getAssetId());
                         notifyCompletion();
                     }
                 }
@@ -183,7 +182,6 @@ public class RemoteAudioAsset extends AudioAsset {
                                                 Log.e(TAG, "Error playing after prepare", e);
                                             }
                                         } else if (playbackState == Player.STATE_ENDED) {
-                                            owner.dispatchComplete(getAssetId());
                                             notifyCompletion();
                                         }
                                     }

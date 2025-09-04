@@ -617,6 +617,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                     AssetManager am = ctx.getResources().getAssets();
                     AssetFileDescriptor assetFileDescriptor = am.openFd(assetPath);
                     AudioAsset asset = new AudioAsset(this, audioId, assetFileDescriptor, audioChannelNum, volume);
+                    asset.setCompletionListener(this::dispatchComplete);
                     audioAssetList.put(audioId, asset);
                     call.resolve(status);
                 } catch (IOException e) {

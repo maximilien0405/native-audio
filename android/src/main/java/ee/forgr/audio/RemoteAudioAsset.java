@@ -120,6 +120,9 @@ public class RemoteAudioAsset extends AudioAsset {
                             Log.d(TAG, "Notifying duration: " + durationSec + " seconds");
                             owner.notifyDurationAvailable(assetId, durationSec);
                         }
+                    } else if (playbackState == Player.STATE_ENDED) {
+                        owner.dispatchComplete(getAssetId());
+                        notifyCompletion();
                     }
                 }
 

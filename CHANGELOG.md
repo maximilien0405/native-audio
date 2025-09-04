@@ -1,6 +1,14 @@
 # Changelog
 
-All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
+All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
+
+## [7.3.37](https://github.com/Cap-go/capacitor-native-audio/compare/7.3.36...7.3.37) (2025-09-04)
+
+
+### Bug Fixes
+
+* Added coderabbit suggestions ([5f6ca89](https://github.com/Cap-go/capacitor-native-audio/commit/5f6ca897a993e9140f089e7a43c53c652c009454))
+* Fixed ended listener on android ([abfcb39](https://github.com/Cap-go/capacitor-native-audio/commit/abfcb39f71a70b74a2055ff615a3040f3f8f040a))
 
 ### [7.3.36](https://github.com/Cap-go/capacitor-native-audio/compare/7.3.35...7.3.36) (2025-07-19)
 

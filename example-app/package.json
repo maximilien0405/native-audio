@@ -1,0 +1,30 @@
+{
+  "name": "native-audio-example",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "sync": "npx cap sync",
+    "ios": "npx cap run ios",
+    "android": "npx cap run android"
+  },
+  "dependencies": {
+    "@capacitor/core": "^7.0.0",
+    "@capgo/native-audio": "file:..",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^5.4.11"
+  }
+}

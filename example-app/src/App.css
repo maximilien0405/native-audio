@@ -1,0 +1,133 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 2.5rem;
+}
+
+.tagline {
+  margin: 0 0 0.5rem;
+  color: #475569;
+}
+
+.panel {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.panel h2 {
+  margin-top: 0;
+}
+
+.asset-selector {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.chip {
+  border: 1px solid #94a3b8;
+  background: transparent;
+  color: #0f172a;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chip--active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.actions,
+.secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.actions button,
+.secondary-actions button {
+  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 0.6rem 1.2rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.actions button:disabled,
+.secondary-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.actions button:hover:not(:disabled),
+.secondary-actions button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.slider-group {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.slider-group input[type='range'] {
+  flex: 1;
+}
+
+.status-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.status-message {
+  margin: 0;
+  color: #1e293b;
+}
+
+.error {
+  margin-top: 0.75rem;
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.instructions {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.instructions code {
+  background: rgba(99, 102, 241, 0.1);
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+}
+
+@media (max-width: 720px) {
+  #root {
+    padding: 2rem 1rem;
+  }
+
+  .actions button,
+  .secondary-actions button {
+    flex: 1 1 45%;
+  }
+}

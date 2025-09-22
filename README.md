@@ -106,6 +106,21 @@ No configuration required for this plugin.
 
 [Example repository](https://github.com/bazuka5801/native-audio-example)
 
+## Example app
+
+This repository now ships with an interactive Capacitor project under `example/` that exercises the main APIs on web, iOS, and Android shells.
+
+```bash
+cd example
+npm install
+npm run dev      # start the web playground
+npm run sync     # optional: generate iOS/Android platforms
+npm run ios      # open the iOS shell app
+npm run android  # open the Android shell app
+```
+
+The UI demonstrates local asset preloading, remote streaming, playback controls, looping, live position updates, and cache clearing for remote audio.
+
 ```typescript
 import {NativeAudio} from '@capgo/native-audio'
 

@@ -158,11 +158,8 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         try {
             if (focus) {
                 // Request audio focus for playback with ducking
-                int result = this.audioManager.requestAudioFocus(
-                    this,
-                    AudioManager.STREAM_MUSIC,
-                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
-                ); // Allow other audio to play quietly
+                int result =
+                    this.audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK); // Allow other audio to play quietly
             } else {
                 this.audioManager.abandonAudioFocus(this);
             }
@@ -197,32 +194,33 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                     call.resolve(new JSObject().put("found", audioAssetList.containsKey(audioId)));
                 }
             }
-        )
-            .start();
+        ).start();
     }
 
     @PluginMethod
     public void preload(final PluginCall call) {
-        this.getActivity().runOnUiThread(
-            new Runnable() {
-                @Override
-                public void run() {
-                    preloadAsset(call);
+        this.getActivity()
+            .runOnUiThread(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        preloadAsset(call);
+                    }
                 }
-            }
-        );
+            );
     }
 
     @PluginMethod
     public void play(final PluginCall call) {
-        this.getActivity().runOnUiThread(
-            new Runnable() {
-                @Override
-                public void run() {
-                    playOrLoop("play", call);
+        this.getActivity()
+            .runOnUiThread(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        playOrLoop("play", call);
+                    }
                 }
-            }
-        );
+            );
     }
 
     @PluginMethod
@@ -284,14 +282,15 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
     @PluginMethod
     public void loop(final PluginCall call) {
-        this.getActivity().runOnUiThread(
-            new Runnable() {
-                @Override
-                public void run() {
-                    playOrLoop("loop", call);
+        this.getActivity()
+            .runOnUiThread(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        playOrLoop("loop", call);
+                    }
                 }
-            }
-        );
+            );
     }
 
     @PluginMethod
@@ -345,24 +344,25 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
     @PluginMethod
     public void stop(final PluginCall call) {
-        this.getActivity().runOnUiThread(
-            new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        String audioId = call.getString(ASSET_ID);
-                        if (!isStringValid(audioId)) {
-                            call.reject(ERROR_AUDIO_ID_MISSING + " - " + audioId);
-                            return;
+        this.getActivity()
+            .runOnUiThread(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            String audioId = call.getString(ASSET_ID);
+                            if (!isStringValid(audioId)) {
+                                call.reject(ERROR_AUDIO_ID_MISSING + " - " + audioId);
+                                return;
+                            }
+                            stopAudio(audioId);
+                            call.resolve();
+                        } catch (Exception ex) {
+                            call.reject(ex.getMessage());
                         }
-                        stopAudio(audioId);
-                        call.resolve();
-                    } catch (Exception ex) {
-                        call.reject(ex.getMessage());
                     }
                 }
-            }
-        );
+            );
     }
 
     @PluginMethod
@@ -490,19 +490,20 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             if (audioAssetList.containsKey(audioId)) {
                 AudioAsset asset = audioAssetList.get(audioId);
                 if (asset != null) {
-                    this.getActivity().runOnUiThread(
-                        new Runnable() {
-                            @Override
-                            public void run() {
-                                try {
-                                    asset.setCurrentTime(time);
-                                    call.resolve();
-                                } catch (Exception e) {
-                                    call.reject("Error setting current time: " + e.getMessage());
+                    this.getActivity()
+                        .runOnUiThread(
+                            new Runnable() {
+                                @Override
+                                public void run() {
+                                    try {
+                                        asset.setCurrentTime(time);
+                                        call.resolve();
+                                    } catch (Exception e) {
+                                        call.reject("Error setting current time: " + e.getMessage());
+                                    }
                                 }
                             }
-                        }
-                    );
+                        );
                 } else {
                     call.reject(ERROR_ASSET_NOT_LOADED + " - " + audioId);
                 }

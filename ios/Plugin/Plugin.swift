@@ -67,9 +67,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                     return false
                 }
 
-                if !hasPlayingAssets {
-                    strongSelf.endSession()
-                }
+                // if !hasPlayingAssets {
+                //     strongSelf.endSession()
+                // }
             }
         }
     }

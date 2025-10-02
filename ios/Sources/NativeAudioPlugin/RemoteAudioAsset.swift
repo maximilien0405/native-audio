@@ -161,7 +161,7 @@ public class RemoteAudioAsset: AudioAsset {
                 guard let strongSelf = self, let strongPlayer = player else { return }
 
                 if let currentItem = notification.object as? AVPlayerItem,
-                   strongPlayer.currentItem == currentItem {
+                   strongPlayer.currentItem === currentItem {
                     strongSelf.playerDidFinishPlaying(player: strongPlayer)
                 }
             }

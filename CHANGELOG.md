@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.5.0](https://github.com/Cap-go/capacitor-native-audio/compare/7.4.0...7.5.0) (2025-10-02)
+
+
+### Features
+
+* **ios:** add SPM support ([a497eea](https://github.com/Cap-go/capacitor-native-audio/commit/a497eeab90f91c4fbca672e9a810485e959cb1f3))
+
 ## [7.4.0](https://github.com/Cap-go/capacitor-native-audio/compare/7.3.37...7.4.0) (2025-09-22)
 
 

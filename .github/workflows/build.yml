@@ -51,6 +51,7 @@ jobs:
         id: build_code
         run: npm run verify:android
   build_ios:
+    needs: lint
     runs-on: macOS-latest
     steps:
       - name: Check out
@@ -98,7 +99,6 @@ jobs:
           tag: next
           provenance: true
       - name: Create GitHub release
-        if: github.run_attempt == 1
         id: create_release
         uses: softprops/action-gh-release@v2
         with:

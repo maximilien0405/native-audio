@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.capgo.nativeaudioexample',
+  appId: 'app.capgo.native.audio',
   appName: 'Native Audio Example',
   webDir: 'dist',
   bundledWebRuntime: false,

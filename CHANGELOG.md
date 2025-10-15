@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.5.12](https://github.com/Cap-go/capacitor-native-audio/compare/7.5.11...7.5.12) (2025-10-15)
+
+
+### Bug Fixes
+
+* **deps:** update dependency com.google.gms:google-services to v4.4.4 ([#190](https://github.com/Cap-go/capacitor-native-audio/issues/190)) ([fe0ce48](https://github.com/Cap-go/capacitor-native-audio/commit/fe0ce483987153ae0f51dcdbc8ae57a8c883e97d))
+
 ## [7.5.11](https://github.com/Cap-go/capacitor-native-audio/compare/7.5.10...7.5.11) (2025-10-15)
 
 

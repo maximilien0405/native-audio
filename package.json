@@ -1,6 +1,6 @@
 {
   "name": "@capgo/native-audio",
-  "version": "7.5.14",
+  "version": "7.5.15",
   "description": "A native plugin for native audio engine",
   "license": "MIT",
   "main": "dist/plugin.cjs.js",

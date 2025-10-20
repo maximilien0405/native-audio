@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.5.15](https://github.com/Cap-go/capacitor-native-audio/compare/7.5.14...7.5.15) (2025-10-20)
+
 ## [7.5.14](https://github.com/Cap-go/capacitor-native-audio/compare/7.5.13...7.5.14) (2025-10-16)
 
 ## [7.5.13](https://github.com/Cap-go/capacitor-native-audio/compare/7.5.12...7.5.13) (2025-10-16)

@@ -555,6 +555,19 @@ Clear the audio cache for remote audio files
 --------------------
 
 
+### getPluginVersion()
+
+```typescript
+getPluginVersion() => Promise<{ version: string; }>
+```
+
+Get the native Capacitor plugin version
+
+**Returns:** <code>Promise&lt;{ version: string; }&gt;</code>
+
+--------------------
+
+
 ### Interfaces
 
 

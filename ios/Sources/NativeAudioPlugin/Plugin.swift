@@ -11,6 +11,7 @@ enum MyError: Error {
 /// here: https://capacitor.ionicframework.com/docs/plugins/ios
 @objc(NativeAudio)
 public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
+    private let PLUGIN_VERSION: String = ""
     public let identifier = "NativeAudio"
     public let jsName = "NativeAudio"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -29,7 +30,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         CAPPluginMethod(name: "getDuration", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "resume", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setCurrentTime", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "clearCache", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "clearCache", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
     ]
     internal let audioQueue = DispatchQueue(label: "ee.forgr.audio.queue", qos: .userInitiated, attributes: .concurrent)
     private var audioList: [String: Any] = [:] {
@@ -601,4 +603,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             ])
         }
     }
+
+    @objc func getPluginVersion(_ call: CAPPluginCall) {
+        call.resolve(["version": self.PLUGIN_VERSION])
+    }
+
 }

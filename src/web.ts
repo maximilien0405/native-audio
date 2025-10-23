@@ -160,6 +160,10 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
       throw 'no assetId provided';
     }
   }
+
+  async getPluginVersion(): Promise<{ version: string }> {
+    return { version: 'web' };
+  }
 }
 
 const NativeAudio = new NativeAudioWeb();

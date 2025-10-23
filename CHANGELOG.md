@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.6.0](https://github.com/Cap-go/capacitor-native-audio/compare/7.5.16...7.6.0) (2025-10-23)
+
+
+### Features
+
+* add getPluginVersion method to NativeAudio plugin and web implementation ([2a7253b](https://github.com/Cap-go/capacitor-native-audio/commit/2a7253ba6e17283131bbb2573febb3d70d8bd520))
+
+
+### Bug Fixes
+
+* remove content field from Discord release notification ([399dc53](https://github.com/Cap-go/capacitor-native-audio/commit/399dc539b71544a01cb6daccf251cad7cfe8c88d))
+
 ## [7.5.16](https://github.com/Cap-go/capacitor-native-audio/compare/7.5.15...7.5.16) (2025-10-20)
 
 

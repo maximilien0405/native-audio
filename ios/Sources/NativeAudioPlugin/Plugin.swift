@@ -77,7 +77,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                     return false
                 }
 
-                if !hasPlayingAssets {
+                // Only deactivate if we have no playing assets AND no other audio is active
+                // This prevents interfering with VoIP calls or other audio sessions
+                if !hasPlayingAssets && !strongSelf.session.isOtherAudioPlaying && strongSelf.session.secondaryAudioShouldBeSilencedHint == false {
                     strongSelf.endSession()
                 }
             }
@@ -220,8 +222,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                 }
             }
 
-            // Only deactivate if no assets are playing
-            if !hasPlayingAssets {
+            // Only deactivate if no assets are playing AND no other audio is active
+            // This prevents interfering with VoIP calls or other audio sessions
+            if !hasPlayingAssets && !session.isOtherAudioPlaying && session.secondaryAudioShouldBeSilencedHint == false {
                 try self.session.setActive(false, options: .notifyOthersOnDeactivation)
             }
         } catch {

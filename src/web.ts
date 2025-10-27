@@ -164,6 +164,14 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
   async getPluginVersion(): Promise<{ version: string }> {
     return { version: 'web' };
   }
+
+  async deinitPlugin(): Promise<void> {
+    // Stop and unload all audio assets
+    for (const [assetId] of NativeAudioWeb.AUDIO_ASSET_BY_ASSET_ID) {
+      await this.unload({ assetId });
+    }
+    return;
+  }
 }
 
 const NativeAudio = new NativeAudioWeb();

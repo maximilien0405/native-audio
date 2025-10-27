@@ -249,4 +249,14 @@ export interface NativeAudio {
    * @throws An error if the something went wrong
    */
   getPluginVersion(): Promise<{ version: string }>;
+
+  /**
+   * Deinitialize the plugin and restore original audio session settings
+   * This method stops all playing audio and reverts any audio session changes made by the plugin
+   * Use this when you need to ensure compatibility with other audio plugins
+   *
+   * @since 7.7.0
+   * @returns {Promise<void>}
+   */
+  deinitPlugin(): Promise<void>;
 }

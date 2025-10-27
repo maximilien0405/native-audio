@@ -31,7 +31,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         CAPPluginMethod(name: "resume", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setCurrentTime", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "clearCache", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "deinitPlugin", returnType: CAPPluginReturnPromise)
     ]
     internal let audioQueue = DispatchQueue(label: "ee.forgr.audio.queue", qos: .userInitiated, attributes: .concurrent)
     private var audioList: [String: Any] = [:] {
@@ -44,6 +45,12 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     var fadeMusic = false
     var session = AVAudioSession.sharedInstance()
 
+    // Track if audio session has been initialized
+    private var audioSessionInitialized = false
+    // Store the original audio category to restore on deinit
+    private var originalAudioCategory: AVAudioSession.Category?
+    private var originalAudioOptions: AVAudioSession.CategoryOptions?
+
     // Add observer for audio session interruptions
     private var interruptionObserver: Any?
 
@@ -53,7 +60,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
         self.fadeMusic = false
 
-        setupAudioSession()
+        // Don't setup audio session on load - defer until first use
+        // setupAudioSession()
         setupInterruptionHandling()
 
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
@@ -84,6 +92,13 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     }
 
     private func setupAudioSession() {
+        // Save the original audio session category before making changes
+        if !audioSessionInitialized {
+            originalAudioCategory = session.category
+            originalAudioOptions = session.categoryOptions
+            audioSessionInitialized = true
+        }
+
         do {
             // Only set the category without immediately activating/deactivating
             try self.session.setCategory(AVAudioSession.Category.playback, options: .mixWithOthers)
@@ -127,6 +142,13 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     }
 
     @objc func configure(_ call: CAPPluginCall) {
+        // Save original category on first configure call
+        if !audioSessionInitialized {
+            originalAudioCategory = session.category
+            originalAudioOptions = session.categoryOptions
+            audioSessionInitialized = true
+        }
+
         if let fade = call.getBool(Constant.FadeKey) {
             self.fadeMusic = fade
         }
@@ -233,6 +255,11 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         let audioId = call.getString(Constant.AssetIdKey) ?? ""
         let time = max(call.getDouble("time") ?? 0, 0) // Ensure non-negative time
         let delay = max(call.getDouble("delay") ?? 0, 0) // Ensure non-negative delay
+
+        // Ensure audio session is initialized before first play
+        if !audioSessionInitialized {
+            setupAudioSession()
+        }
 
         // Use sync for operations that need to be blocking
         audioQueue.sync {
@@ -606,6 +633,38 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     @objc func getPluginVersion(_ call: CAPPluginCall) {
         call.resolve(["version": self.PLUGIN_VERSION])
+    }
+
+    @objc func deinitPlugin(_ call: CAPPluginCall) {
+        // Stop all playing audio
+        audioQueue.sync(flags: .barrier) {
+            for (_, asset) in self.audioList {
+                if let audioAsset = asset as? AudioAsset {
+                    audioAsset.stop()
+                }
+            }
+        }
+
+        // Restore original audio session settings if we changed them
+        if audioSessionInitialized, let originalCategory = originalAudioCategory {
+            do {
+                // Deactivate our audio session
+                try self.session.setActive(false, options: .notifyOthersOnDeactivation)
+
+                // Restore original category and options
+                if let originalOptions = originalAudioOptions {
+                    try self.session.setCategory(originalCategory, options: originalOptions)
+                } else {
+                    try self.session.setCategory(originalCategory)
+                }
+
+                audioSessionInitialized = false
+            } catch {
+                print("Failed to restore audio session: \(error)")
+            }
+        }
+
+        call.resolve()
     }
 
 }

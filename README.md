@@ -572,6 +572,21 @@ Get the native Capacitor plugin version
 --------------------
 
 
+### deinitPlugin()
+
+```typescript
+deinitPlugin() => Promise<void>
+```
+
+Deinitialize the plugin and restore original audio session settings
+This method stops all playing audio and reverts any audio session changes made by the plugin
+Use this when you need to ensure compatibility with other audio plugins
+
+**Since:** 7.7.0
+
+--------------------
+
+
 ### Interfaces
 
 

@@ -59,6 +59,8 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     private static ArrayList<AudioAsset> resumeList;
     private AudioManager audioManager;
     private boolean fadeMusic = false;
+    private boolean audioFocusRequested = false;
+    private int originalAudioMode = AudioManager.MODE_INVALID;
 
     private final Map<String, PluginCall> pendingDurationCalls = new HashMap<>();
 
@@ -69,6 +71,11 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         this.audioManager = (AudioManager) this.getActivity().getSystemService(Context.AUDIO_SERVICE);
 
         audioAssetList = new HashMap<>();
+
+        // Store the original audio mode but don't request focus yet
+        if (this.audioManager != null) {
+            originalAudioMode = this.audioManager.getMode();
+        }
     }
 
     @Override
@@ -153,6 +160,11 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             return;
         }
 
+        // Save original audio mode if not already saved
+        if (originalAudioMode == AudioManager.MODE_INVALID) {
+            originalAudioMode = this.audioManager.getMode();
+        }
+
         boolean focus = call.getBoolean(OPT_FOCUS_AUDIO, false);
         boolean background = call.getBoolean("background", false);
         this.fadeMusic = call.getBoolean("fade", false);
@@ -165,8 +177,10 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                     AudioManager.STREAM_MUSIC,
                     AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
                 ); // Allow other audio to play quietly
-            } else {
+                audioFocusRequested = true;
+            } else if (audioFocusRequested) {
                 this.audioManager.abandonAudioFocus(this);
+                audioFocusRequested = false;
             }
 
             if (background) {
@@ -717,6 +731,37 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             call.resolve(ret);
         } catch (final Exception e) {
             call.reject("Could not get plugin version", e);
+        }
+    }
+
+    @PluginMethod
+    public void deinitPlugin(final PluginCall call) {
+        try {
+            // Stop all playing audio
+            if (audioAssetList != null) {
+                for (AudioAsset asset : audioAssetList.values()) {
+                    if (asset != null) {
+                        asset.stop();
+                    }
+                }
+            }
+
+            // Release audio focus if we requested it
+            if (audioFocusRequested && this.audioManager != null) {
+                this.audioManager.abandonAudioFocus(this);
+                audioFocusRequested = false;
+            }
+
+            // Restore original audio mode if we changed it
+            if (originalAudioMode != AudioManager.MODE_INVALID && this.audioManager != null) {
+                this.audioManager.setMode(originalAudioMode);
+                originalAudioMode = AudioManager.MODE_INVALID;
+            }
+
+            call.resolve();
+        } catch (Exception e) {
+            Log.e(TAG, "Error in deinitPlugin", e);
+            call.reject("Error deinitializing plugin: " + e.getMessage());
         }
     }
 }

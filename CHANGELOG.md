@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.7.0](https://github.com/Cap-go/capacitor-native-audio/compare/7.6.3...7.7.0) (2025-10-27)
+
+
+### Features
+
+* add deinitPlugin method to restore audio session settings ([05caaee](https://github.com/Cap-go/capacitor-native-audio/commit/05caaeeaba5d9a8de838578091588b159a25303e))
+
 ## [7.6.3](https://github.com/Cap-go/capacitor-native-audio/compare/7.6.2...7.6.3) (2025-10-26)
 
 

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.7.4](https://github.com/Cap-go/capacitor-native-audio/compare/7.7.3...7.7.4) (2025-10-27)
+
+
+### Bug Fixes
+
+* CI/CD config ([3631d6c](https://github.com/Cap-go/capacitor-native-audio/commit/3631d6c31b95ee3230d922c1d0aa21840321615d))
+* improve audio session management to prevent interference with VoIP calls ([2dcbab5](https://github.com/Cap-go/capacitor-native-audio/commit/2dcbab5947375da916936eb1ec5732979381c38e))
+
 ## [7.7.3](https://github.com/Cap-go/capacitor-native-audio/compare/7.7.2...7.7.3) (2025-10-27)
 
 ## [7.7.2](https://github.com/Cap-go/capacitor-native-audio/compare/7.7.1...7.7.2) (2025-10-27)

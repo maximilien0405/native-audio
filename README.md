@@ -38,6 +38,22 @@ Click on video to see example 💥
 
 [![YouTube Example](https://img.youtube.com/vi/XpUGlWWtwHs/0.jpg)](https://www.youtube.com/watch?v=XpUGlWWtwHs)
 
+## Why Native Audio?
+
+The only **free**, **full-featured** audio playback plugin for Capacitor:
+
+- **HLS/M3U8 streaming** - Play live audio streams and adaptive bitrate content
+- **Remote URLs** - Stream from HTTP/HTTPS sources with built-in caching
+- **Low-latency playback** - Optimized native audio engine for sound effects and music
+- **Full control** - Play, pause, resume, loop, seek, volume, playback rate
+- **Multiple channels** - Play multiple audio files simultaneously
+- **Background playback** - Continue playing when app is backgrounded
+- **Position tracking** - Real-time currentTime events (100ms intervals)
+- **Modern package management** - Supports both Swift Package Manager (SPM) and CocoaPods (SPM-ready for Capacitor 8)
+- **Same JavaScript API** - Compatible interface with paid alternatives
+
+Perfect for music players, podcast apps, games, meditation apps, and any audio-heavy application.
+
 ## Maintainers
 
 | Maintainer      | GitHub                              | Social                                  |

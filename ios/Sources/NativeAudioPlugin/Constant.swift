@@ -17,6 +17,8 @@ public class Constant {
     public static let Loop = "loop"
     public static let Background = "background"
     public static let IgnoreSilent = "ignoreSilent"
+    public static let ShowNotification = "showNotification"
+    public static let NotificationMetadata = "notificationMetadata"
 
     // Default values - used for consistency across the plugin
     public static let DefaultVolume: Float = 1.0

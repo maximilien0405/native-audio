@@ -16,6 +16,8 @@ public class Constant {
     public static final String RATE = "rate";
     public static final String AUDIO_CHANNEL_NUM = "audioChannelNum";
     public static final String LOOP = "loop";
+    public static final String SHOW_NOTIFICATION = "showNotification";
+    public static final String NOTIFICATION_METADATA = "notificationMetadata";
     public static final int INVALID = 0;
     public static final int PREPARED = 1;
     public static final int PENDING_PLAY = 2;

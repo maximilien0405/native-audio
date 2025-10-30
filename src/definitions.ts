@@ -69,6 +69,30 @@ export interface ConfigureOptions {
    * Ignore silent mode, works only on iOS setting this will nuke other audio apps
    */
   ignoreSilent?: boolean;
+  /**
+   * Show audio playback in the notification center (iOS and Android)
+   * When enabled, displays audio metadata (title, artist, album, artwork) in the system notification
+   */
+  showNotification?: boolean;
+}
+
+export interface NotificationMetadata {
+  /**
+   * The title to display in the notification center
+   */
+  title?: string;
+  /**
+   * The artist name to display in the notification center
+   */
+  artist?: string;
+  /**
+   * The album name to display in the notification center
+   */
+  album?: string;
+  /**
+   * URL or local path to the artwork/album art image
+   */
+  artworkUrl?: string;
 }
 
 export interface PreloadOptions {
@@ -96,6 +120,11 @@ export interface PreloadOptions {
    * or a streaming URL (m3u8)
    */
   isUrl?: boolean;
+  /**
+   * Metadata to display in the notification center when audio is playing
+   * Only used when showNotification is enabled in configure()
+   */
+  notificationMetadata?: NotificationMetadata;
 }
 
 export interface CurrentTimeEvent {

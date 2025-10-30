@@ -26,7 +26,7 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
     let FADEDELAY: Float = 0.08
 
     // Maximum number of channels to prevent excessive resource usage
-    private let MAX_CHANNELS = Constant.MaxChannels
+    private let maxChannels = Constant.MaxChannels
 
     private var currentTimeTimer: Timer?
     internal var fadeTimer: Timer?
@@ -65,7 +65,7 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
         }
 
         // Limit channels to a reasonable maximum to prevent resource issues
-        let channelCount = min(max(channels ?? 1, 1), MAX_CHANNELS)
+        let channelCount = min(max(channels ?? 1, 1), maxChannels)
 
         owner.executeOnAudioQueue { [weak self] in
             guard let self = self else { return }

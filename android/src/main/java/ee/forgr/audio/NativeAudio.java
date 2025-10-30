@@ -9,21 +9,32 @@ import static ee.forgr.audio.Constant.ERROR_AUDIO_ASSET_MISSING;
 import static ee.forgr.audio.Constant.ERROR_AUDIO_EXISTS;
 import static ee.forgr.audio.Constant.ERROR_AUDIO_ID_MISSING;
 import static ee.forgr.audio.Constant.LOOP;
+import static ee.forgr.audio.Constant.NOTIFICATION_METADATA;
 import static ee.forgr.audio.Constant.OPT_FOCUS_AUDIO;
 import static ee.forgr.audio.Constant.RATE;
+import static ee.forgr.audio.Constant.SHOW_NOTIFICATION;
 import static ee.forgr.audio.Constant.VOLUME;
 
 import android.Manifest;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
+import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.session.MediaSessionCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
 import android.util.Log;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.media3.common.util.UnstableApi;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -63,6 +74,14 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     private int originalAudioMode = AudioManager.MODE_INVALID;
 
     private final Map<String, PluginCall> pendingDurationCalls = new HashMap<>();
+
+    // Notification center support
+    private boolean showNotification = false;
+    private Map<String, Map<String, String>> notificationMetadataMap = new HashMap<>();
+    private MediaSessionCompat mediaSession;
+    private String currentlyPlayingAssetId;
+    private static final int NOTIFICATION_ID = 1001;
+    private static final String CHANNEL_ID = "native_audio_channel";
 
     @Override
     public void load() {
@@ -168,6 +187,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         boolean focus = call.getBoolean(OPT_FOCUS_AUDIO, false);
         boolean background = call.getBoolean("background", false);
         this.fadeMusic = call.getBoolean("fade", false);
+        this.showNotification = call.getBoolean(SHOW_NOTIFICATION, false);
 
         try {
             if (focus) {
@@ -188,6 +208,11 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                 this.audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
             } else {
                 this.audioManager.setMode(AudioManager.MODE_NORMAL);
+            }
+
+            if (this.showNotification) {
+                setupMediaSession();
+                createNotificationChannel();
             }
         } catch (Exception ex) {
             Log.e(TAG, "Error configuring audio", ex);
@@ -324,6 +349,12 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                     if (wasPlaying) {
                         resumeList.add(asset);
                     }
+
+                    // Update notification when paused
+                    if (showNotification) {
+                        updatePlaybackState(PlaybackStateCompat.STATE_PAUSED);
+                    }
+
                     call.resolve();
                 } else {
                     call.reject(ERROR_ASSET_NOT_LOADED + " - " + audioId);
@@ -347,6 +378,12 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                 if (asset != null) {
                     asset.resume();
                     resumeList.add(asset);
+
+                    // Update notification when resumed
+                    if (showNotification) {
+                        updatePlaybackState(PlaybackStateCompat.STATE_PLAYING);
+                    }
+
                     call.resolve();
                 } else {
                     call.reject(ERROR_ASSET_NOT_LOADED + " - " + audioId);
@@ -372,6 +409,13 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                             return;
                         }
                         stopAudio(audioId);
+
+                        // Clear notification when stopped
+                        if (showNotification) {
+                            clearNotification();
+                            currentlyPlayingAssetId = null;
+                        }
+
                         call.resolve();
                     } catch (Exception ex) {
                         call.reject(ex.getMessage());
@@ -581,6 +625,19 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                 audioChannelNum = call.getInt(AUDIO_CHANNEL_NUM, 1);
             }
 
+            // Store notification metadata if provided
+            JSObject metadata = call.getObject(NOTIFICATION_METADATA);
+            if (metadata != null) {
+                Map<String, String> metadataMap = new HashMap<>();
+                if (metadata.has("title")) metadataMap.put("title", metadata.getString("title"));
+                if (metadata.has("artist")) metadataMap.put("artist", metadata.getString("artist"));
+                if (metadata.has("album")) metadataMap.put("album", metadata.getString("album"));
+                if (metadata.has("artworkUrl")) metadataMap.put("artworkUrl", metadata.getString("artworkUrl"));
+                if (!metadataMap.isEmpty()) {
+                    notificationMetadataMap.put(audioId, metadataMap);
+                }
+            }
+
             if (isLocalUrl) {
                 try {
                     Uri uri = Uri.parse(assetPath);
@@ -666,6 +723,13 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                             asset.play(time);
                         }
                     }
+
+                    // Update notification if enabled
+                    if (showNotification) {
+                        currentlyPlayingAssetId = audioId;
+                        updateNotification(audioId);
+                    }
+
                     call.resolve();
                 } else {
                     call.reject("Asset is null: " + audioId);
@@ -746,6 +810,15 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                 }
             }
 
+            // Clear notification and release media session
+            if (showNotification) {
+                clearNotification();
+                if (mediaSession != null) {
+                    mediaSession.release();
+                    mediaSession = null;
+                }
+            }
+
             // Release audio focus if we requested it
             if (audioFocusRequested && this.audioManager != null) {
                 this.audioManager.abandonAudioFocus(this);
@@ -763,5 +836,183 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             Log.e(TAG, "Error in deinitPlugin", e);
             call.reject("Error deinitializing plugin: " + e.getMessage());
         }
+    }
+
+    // Notification and MediaSession methods
+
+    private void setupMediaSession() {
+        if (mediaSession != null) return;
+
+        mediaSession = new MediaSessionCompat(getContext(), "NativeAudio");
+
+        mediaSession.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS | MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
+
+        PlaybackStateCompat.Builder stateBuilder = new PlaybackStateCompat.Builder().setActions(
+            PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE | PlaybackStateCompat.ACTION_STOP
+        );
+        mediaSession.setPlaybackState(stateBuilder.build());
+
+        // Set callback for media button events
+        mediaSession.setCallback(
+            new MediaSessionCompat.Callback() {
+                @Override
+                public void onPlay() {
+                    if (currentlyPlayingAssetId != null && audioAssetList.containsKey(currentlyPlayingAssetId)) {
+                        AudioAsset asset = audioAssetList.get(currentlyPlayingAssetId);
+                        try {
+                            if (asset != null && !asset.isPlaying()) {
+                                asset.resume();
+                                updatePlaybackState(PlaybackStateCompat.STATE_PLAYING);
+                            }
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error resuming audio from media session", e);
+                        }
+                    }
+                }
+
+                @Override
+                public void onPause() {
+                    if (currentlyPlayingAssetId != null && audioAssetList.containsKey(currentlyPlayingAssetId)) {
+                        AudioAsset asset = audioAssetList.get(currentlyPlayingAssetId);
+                        try {
+                            if (asset != null) {
+                                asset.pause();
+                                updatePlaybackState(PlaybackStateCompat.STATE_PAUSED);
+                            }
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error pausing audio from media session", e);
+                        }
+                    }
+                }
+
+                @Override
+                public void onStop() {
+                    if (currentlyPlayingAssetId != null) {
+                        try {
+                            stopAudio(currentlyPlayingAssetId);
+                            clearNotification();
+                            currentlyPlayingAssetId = null;
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error stopping audio from media session", e);
+                        }
+                    }
+                }
+            }
+        );
+
+        mediaSession.setActive(true);
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Audio Playback", NotificationManager.IMPORTANCE_LOW);
+            channel.setDescription("Shows currently playing audio");
+            NotificationManager notificationManager = getContext().getSystemService(NotificationManager.class);
+            if (notificationManager != null) {
+                notificationManager.createNotificationChannel(channel);
+            }
+        }
+    }
+
+    private void updateNotification(String audioId) {
+        if (mediaSession == null) return;
+
+        Map<String, String> metadata = notificationMetadataMap.get(audioId);
+        String title = metadata != null && metadata.containsKey("title") ? metadata.get("title") : "Playing";
+        String artist = metadata != null && metadata.containsKey("artist") ? metadata.get("artist") : "";
+        String album = metadata != null && metadata.containsKey("album") ? metadata.get("album") : "";
+        String artworkUrl = metadata != null ? metadata.get("artworkUrl") : null;
+
+        // Update MediaSession metadata
+        MediaMetadataCompat.Builder metadataBuilder = new MediaMetadataCompat.Builder();
+        metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_TITLE, title);
+        metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist);
+        metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album);
+
+        // Load artwork if provided
+        if (artworkUrl != null) {
+            loadArtwork(artworkUrl, (bitmap) -> {
+                if (bitmap != null) {
+                    metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, bitmap);
+                }
+                mediaSession.setMetadata(metadataBuilder.build());
+                showNotification(title, artist);
+            });
+        } else {
+            mediaSession.setMetadata(metadataBuilder.build());
+            showNotification(title, artist);
+        }
+
+        updatePlaybackState(PlaybackStateCompat.STATE_PLAYING);
+    }
+
+    private void showNotification(String title, String artist) {
+        NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(getContext(), CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(title)
+            .setContentText(artist)
+            .setStyle(
+                new androidx.media.app.NotificationCompat.MediaStyle()
+                    .setMediaSession(mediaSession.getSessionToken())
+                    .setShowActionsInCompactView(0, 1, 2)
+            )
+            .addAction(android.R.drawable.ic_media_previous, "Previous", null)
+            .addAction(android.R.drawable.ic_media_pause, "Pause", null)
+            .addAction(android.R.drawable.ic_media_next, "Next", null)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true);
+
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(getContext());
+        notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
+    }
+
+    private void clearNotification() {
+        NotificationManagerCompat notificationManager = NotificationManagerCompat.from(getContext());
+        notificationManager.cancel(NOTIFICATION_ID);
+
+        if (mediaSession != null) {
+            updatePlaybackState(PlaybackStateCompat.STATE_STOPPED);
+        }
+    }
+
+    private void updatePlaybackState(int state) {
+        if (mediaSession == null) return;
+
+        PlaybackStateCompat.Builder stateBuilder = new PlaybackStateCompat.Builder()
+            .setState(state, 0, state == PlaybackStateCompat.STATE_PLAYING ? 1.0f : 0.0f)
+            .setActions(PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE | PlaybackStateCompat.ACTION_STOP);
+        mediaSession.setPlaybackState(stateBuilder.build());
+    }
+
+    private void loadArtwork(String urlString, ArtworkCallback callback) {
+        new Thread(() -> {
+            try {
+                Uri uri = Uri.parse(urlString);
+                Bitmap bitmap = null;
+
+                if (uri.getScheme() == null || uri.getScheme().equals("file")) {
+                    // Local file
+                    File file = new File(uri.getPath());
+                    if (file.exists()) {
+                        bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
+                    }
+                } else {
+                    // Remote URL
+                    URL url = new URL(urlString);
+                    bitmap = BitmapFactory.decodeStream(url.openConnection().getInputStream());
+                }
+
+                Bitmap finalBitmap = bitmap;
+                new Handler(Looper.getMainLooper()).post(() -> callback.onArtworkLoaded(finalBitmap));
+            } catch (Exception e) {
+                Log.e(TAG, "Error loading artwork", e);
+                new Handler(Looper.getMainLooper()).post(() -> callback.onArtworkLoaded(null));
+            }
+        })
+            .start();
+    }
+
+    interface ArtworkCallback {
+        void onArtworkLoaded(Bitmap bitmap);
     }
 }

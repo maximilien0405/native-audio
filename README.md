@@ -48,6 +48,7 @@ The only **free**, **full-featured** audio playback plugin for Capacitor:
 - **Full control** - Play, pause, resume, loop, seek, volume, playback rate
 - **Multiple channels** - Play multiple audio files simultaneously
 - **Background playback** - Continue playing when app is backgrounded
+- **Notification center display** - Show audio metadata in iOS Control Center and Android notifications
 - **Position tracking** - Real-time currentTime events (100ms intervals)
 - **Modern package management** - Supports both Swift Package Manager (SPM) and CocoaPods (SPM-ready for Capacitor 8)
 - **Same JavaScript API** - Compatible interface with paid alternatives
@@ -129,6 +130,70 @@ No configuration required for this plugin.
 ## Usage
 
 [Example repository](https://github.com/bazuka5801/native-audio-example)
+
+### Notification Center Display (iOS & Android)
+
+You can display audio playback information in the system notification center. This is perfect for music players, podcast apps, and any app that plays audio in the background.
+
+**Step 1: Configure the plugin with notification support**
+
+```typescript
+import { NativeAudio } from '@capgo/native-audio'
+
+// Enable notification center display
+await NativeAudio.configure({
+  showNotification: true,
+  background: true  // Also enable background playback
+});
+```
+
+**Step 2: Preload audio with metadata**
+
+```typescript
+await NativeAudio.preload({
+  assetId: 'song1',
+  assetPath: 'https://example.com/song.mp3',
+  isUrl: true,
+  notificationMetadata: {
+    title: 'My Song Title',
+    artist: 'Artist Name',
+    album: 'Album Name',
+    artworkUrl: 'https://example.com/artwork.jpg'  // Can be local or remote URL
+  }
+});
+```
+
+**Step 3: Play the audio**
+
+```typescript
+// When you play the audio, it will automatically appear in the notification center
+await NativeAudio.play({ assetId: 'song1' });
+```
+
+The notification will:
+- Show the title, artist, and album information
+- Display the artwork/album art (if provided)
+- Include media controls (play/pause/stop buttons)
+- Automatically update when audio is paused/resumed
+- Automatically clear when audio is stopped
+- Work on both iOS and Android
+
+**Media Controls:**
+Users can control playback directly from:
+- iOS: Control Center, Lock Screen, CarPlay
+- Android: Notification tray, Lock Screen, Android Auto
+
+The media control buttons automatically handle:
+- **Play** - Resumes paused audio
+- **Pause** - Pauses playing audio
+- **Stop** - Stops audio and clears the notification
+
+**Notes:**
+- All metadata fields are optional
+- Artwork can be a local file path or remote URL
+- The notification only appears when `showNotification: true` is set in configure()
+- iOS: Uses MPNowPlayingInfoCenter with MPRemoteCommandCenter
+- Android: Uses MediaSession with NotificationCompat.MediaStyle
 
 ## Example app
 
@@ -608,23 +673,35 @@ Use this when you need to ensure compatibility with other audio plugins
 
 #### ConfigureOptions
 
-| Prop               | Type                 | Description                                                                   |
-| ------------------ | -------------------- | ----------------------------------------------------------------------------- |
-| **`fade`**         | <code>boolean</code> | Play the audio with Fade effect, only available for IOS                       |
-| **`focus`**        | <code>boolean</code> | focus the audio with Audio Focus                                              |
-| **`background`**   | <code>boolean</code> | Play the audio in the background                                              |
-| **`ignoreSilent`** | <code>boolean</code> | Ignore silent mode, works only on iOS setting this will nuke other audio apps |
+| Prop                   | Type                 | Description                                                                                                                                                       |
+| ---------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`fade`**             | <code>boolean</code> | Play the audio with Fade effect, only available for IOS                                                                                                           |
+| **`focus`**            | <code>boolean</code> | focus the audio with Audio Focus                                                                                                                                  |
+| **`background`**       | <code>boolean</code> | Play the audio in the background                                                                                                                                  |
+| **`ignoreSilent`**     | <code>boolean</code> | Ignore silent mode, works only on iOS setting this will nuke other audio apps                                                                                     |
+| **`showNotification`** | <code>boolean</code> | Show audio playback in the notification center (iOS and Android) When enabled, displays audio metadata (title, artist, album, artwork) in the system notification |
 
 
 #### PreloadOptions
 
-| Prop                  | Type                 | Description                                                                                                                                                                           |
-| --------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`assetPath`**       | <code>string</code>  | Path to the audio file, relative path of the file, absolute url (file://) or remote url (https://) Supported formats: - MP3, WAV (all platforms) - M3U8/HLS streams (iOS and Android) |
-| **`assetId`**         | <code>string</code>  | Asset Id, unique identifier of the file                                                                                                                                               |
-| **`volume`**          | <code>number</code>  | Volume of the audio, between 0.1 and 1.0                                                                                                                                              |
-| **`audioChannelNum`** | <code>number</code>  | Audio channel number, default is 1                                                                                                                                                    |
-| **`isUrl`**           | <code>boolean</code> | Is the audio file a URL, pass true if assetPath is a `file://` url or a streaming URL (m3u8)                                                                                          |
+| Prop                       | Type                                                                  | Description                                                                                                                                                                           |
+| -------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`assetPath`**            | <code>string</code>                                                   | Path to the audio file, relative path of the file, absolute url (file://) or remote url (https://) Supported formats: - MP3, WAV (all platforms) - M3U8/HLS streams (iOS and Android) |
+| **`assetId`**              | <code>string</code>                                                   | Asset Id, unique identifier of the file                                                                                                                                               |
+| **`volume`**               | <code>number</code>                                                   | Volume of the audio, between 0.1 and 1.0                                                                                                                                              |
+| **`audioChannelNum`**      | <code>number</code>                                                   | Audio channel number, default is 1                                                                                                                                                    |
+| **`isUrl`**                | <code>boolean</code>                                                  | Is the audio file a URL, pass true if assetPath is a `file://` url or a streaming URL (m3u8)                                                                                          |
+| **`notificationMetadata`** | <code><a href="#notificationmetadata">NotificationMetadata</a></code> | Metadata to display in the notification center when audio is playing Only used when showNotification is enabled in configure()                                                        |
+
+
+#### NotificationMetadata
+
+| Prop             | Type                | Description                                           |
+| ---------------- | ------------------- | ----------------------------------------------------- |
+| **`title`**      | <code>string</code> | The title to display in the notification center       |
+| **`artist`**     | <code>string</code> | The artist name to display in the notification center |
+| **`album`**      | <code>string</code> | The album name to display in the notification center  |
+| **`artworkUrl`** | <code>string</code> | URL or local path to the artwork/album art image      |
 
 
 #### Assets

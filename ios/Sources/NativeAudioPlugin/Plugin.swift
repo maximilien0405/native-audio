@@ -2,6 +2,7 @@ import AVFoundation
 import Capacitor
 import CoreAudio
 import Foundation
+import MediaPlayer
 
 enum MyError: Error {
     case runtimeError(String)
@@ -9,6 +10,7 @@ enum MyError: Error {
 
 /// Please read the Capacitor iOS Plugin Development Guide
 /// here: https://capacitor.ionicframework.com/docs/plugins/ios
+// swiftlint:disable type_body_length file_length
 @objc(NativeAudio)
 public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     private let pluginVersion: String = "7.7.7"
@@ -54,6 +56,11 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     // Add observer for audio session interruptions
     private var interruptionObserver: Any?
 
+    // Notification center support
+    private var showNotification = false
+    private var notificationMetadataMap: [String: [String: String]] = [:]
+    private var currentlyPlayingAssetId: String?
+
     @objc override public func load() {
         super.load()
         audioQueue.setSpecific(key: queueKey, value: true)
@@ -63,6 +70,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         // Don't setup audio session on load - defer until first use
         // setupAudioSession()
         setupInterruptionHandling()
+        setupRemoteCommandCenter()
 
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
             guard let strongSelf = self else { return }
@@ -143,6 +151,89 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
+    // swiftlint:disable function_body_length
+    private func setupRemoteCommandCenter() {
+        let commandCenter = MPRemoteCommandCenter.shared()
+
+        // Play command
+        commandCenter.playCommand.addTarget { [weak self] _ in
+            guard let self = self, let assetId = self.currentlyPlayingAssetId else {
+                return .noSuchContent
+            }
+
+            self.audioQueue.sync {
+                guard let asset = self.audioList[assetId] as? AudioAsset else {
+                    return
+                }
+
+                if !asset.isPlaying() {
+                    asset.resume()
+                    self.updatePlaybackState(isPlaying: true)
+                }
+            }
+            return .success
+        }
+
+        // Pause command
+        commandCenter.pauseCommand.addTarget { [weak self] _ in
+            guard let self = self, let assetId = self.currentlyPlayingAssetId else {
+                return .noSuchContent
+            }
+
+            self.audioQueue.sync {
+                guard let asset = self.audioList[assetId] as? AudioAsset else {
+                    return
+                }
+
+                asset.pause()
+                self.updatePlaybackState(isPlaying: false)
+            }
+            return .success
+        }
+
+        // Stop command
+        commandCenter.stopCommand.addTarget { [weak self] _ in
+            guard let self = self, let assetId = self.currentlyPlayingAssetId else {
+                return .noSuchContent
+            }
+
+            self.audioQueue.sync {
+                guard let asset = self.audioList[assetId] as? AudioAsset else {
+                    return
+                }
+
+                asset.stop()
+                self.clearNowPlayingInfo()
+                self.currentlyPlayingAssetId = nil
+                self.updatePlaybackState(isPlaying: false)
+            }
+            return .success
+        }
+
+        // Toggle play/pause command
+        commandCenter.togglePlayPauseCommand.addTarget { [weak self] _ in
+            guard let self = self, let assetId = self.currentlyPlayingAssetId else {
+                return .noSuchContent
+            }
+
+            self.audioQueue.sync {
+                guard let asset = self.audioList[assetId] as? AudioAsset else {
+                    return
+                }
+
+                if asset.isPlaying() {
+                    asset.pause()
+                    self.updatePlaybackState(isPlaying: false)
+                } else {
+                    asset.resume()
+                    self.updatePlaybackState(isPlaying: true)
+                }
+            }
+            return .success
+        }
+    }
+    // swiftlint:enable function_body_length
+
     @objc func configure(_ call: CAPPluginCall) {
         // Save original category on first configure call
         if !audioSessionInitialized {
@@ -158,6 +249,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         let focus = call.getBool(Constant.FocusAudio) ?? false
         let background = call.getBool(Constant.Background) ?? false
         let ignoreSilent = call.getBool(Constant.IgnoreSilent) ?? true
+        self.showNotification = call.getBool(Constant.ShowNotification) ?? false
 
         // Use a single audio session configuration block for better atomicity
         do {
@@ -283,6 +375,14 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                 } else {
                     audioAsset.play(time: time, delay: delay)
                 }
+
+                // Update notification center if enabled
+                if self.showNotification {
+                    self.currentlyPlayingAssetId = audioId
+                    self.updateNowPlayingInfo(audioId: audioId, audioAsset: audioAsset)
+                    self.updatePlaybackState(isPlaying: true)
+                }
+
                 call.resolve()
             } else if let audioNumber = asset as? NSNumber {
                 self.activateSession()
@@ -350,6 +450,12 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             }
             self.activateSession()
             audioAsset.resume()
+
+            // Update notification when resumed
+            if self.showNotification {
+                self.updatePlaybackState(isPlaying: true)
+            }
+
             call.resolve()
         }
     }
@@ -362,6 +468,12 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             }
 
             audioAsset.pause()
+
+            // Update notification when paused
+            if self.showNotification {
+                self.updatePlaybackState(isPlaying: false)
+            }
+
             self.endSession()
             call.resolve()
         }
@@ -378,6 +490,13 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
             do {
                 try self.stopAudio(audioId: audioId)
+
+                // Clear notification when stopped
+                if self.showNotification {
+                    self.clearNowPlayingInfo()
+                    self.currentlyPlayingAssetId = nil
+                }
+
                 self.endSession()
                 call.resolve()
             } catch {
@@ -468,6 +587,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
+    // swiftlint:disable cyclomatic_complexity function_body_length
     @objc private func preloadAsset(_ call: CAPPluginCall, isComplex complex: Bool) {
         // Common default values to ensure consistency
         let audioId = call.getString(Constant.AssetIdKey) ?? ""
@@ -485,6 +605,26 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         if assetPath == "" {
             call.reject(Constant.ErrorAssetPath)
             return
+        }
+
+        // Store notification metadata if provided
+        if let metadata = call.getObject(Constant.NotificationMetadata) {
+            var metadataDict: [String: String] = [:]
+            if let title = metadata["title"] as? String {
+                metadataDict["title"] = title
+            }
+            if let artist = metadata["artist"] as? String {
+                metadataDict["artist"] = artist
+            }
+            if let album = metadata["album"] as? String {
+                metadataDict["album"] = album
+            }
+            if let artworkUrl = metadata["artworkUrl"] as? String {
+                metadataDict["artworkUrl"] = artworkUrl
+            }
+            if !metadataDict.isEmpty {
+                notificationMetadataMap[audioId] = metadataDict
+            }
         }
 
         if complex {
@@ -593,6 +733,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             call.resolve()
         }
     }
+    // swiftlint:enable cyclomatic_complexity function_body_length
 
     private func stopAudio(audioId: String) throws {
         var asset: AudioAsset?
@@ -648,6 +789,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             }
         }
 
+        // Clear notification center
+        clearNowPlayingInfo()
+
         // Restore original audio session settings if we changed them
         if audioSessionInitialized, let originalCategory = originalAudioCategory {
             do {
@@ -668,6 +812,89 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
 
         call.resolve()
+    }
+
+    // MARK: - Now Playing Info Methods
+
+    private func updateNowPlayingInfo(audioId: String, audioAsset: AudioAsset) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            var nowPlayingInfo = [String: Any]()
+
+            // Get metadata from the map
+            if let metadata = self.notificationMetadataMap[audioId] {
+                if let title = metadata["title"] {
+                    nowPlayingInfo[MPMediaItemPropertyTitle] = title
+                }
+                if let artist = metadata["artist"] {
+                    nowPlayingInfo[MPMediaItemPropertyArtist] = artist
+                }
+                if let album = metadata["album"] {
+                    nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = album
+                }
+
+                // Load artwork if provided
+                if let artworkUrl = metadata["artworkUrl"] {
+                    self.loadArtwork(from: artworkUrl) { image in
+                        if let image = image {
+                            nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in
+                                return image
+                            }
+                            MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+                        }
+                    }
+                }
+            }
+
+            // Add playback info
+            nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = audioAsset.getDuration()
+            nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = audioAsset.getCurrentTime()
+            nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = 1.0
+
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+        }
+    }
+
+    private func clearNowPlayingInfo() {
+        DispatchQueue.main.async {
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        }
+    }
+
+    private func updatePlaybackState(isPlaying: Bool) {
+        DispatchQueue.main.async {
+            var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
+            nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+        }
+    }
+
+    private func loadArtwork(from urlString: String, completion: @escaping (UIImage?) -> Void) {
+        // Check if it's a local file path or URL
+        if let url = URL(string: urlString) {
+            if url.scheme == nil || url.isFileURL {
+                // Local file
+                let path = url.path
+                if FileManager.default.fileExists(atPath: path) {
+                    if let image = UIImage(contentsOfFile: path) {
+                        completion(image)
+                        return
+                    }
+                }
+            } else {
+                // Remote URL
+                URLSession.shared.dataTask(with: url) { data, _, _ in
+                    if let data = data, let image = UIImage(data: data) {
+                        completion(image)
+                    } else {
+                        completion(nil)
+                    }
+                }.resume()
+                return
+            }
+        }
+        completion(nil)
     }
 
 }

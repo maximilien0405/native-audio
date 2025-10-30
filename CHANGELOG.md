@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.9.0](https://github.com/Cap-go/capacitor-native-audio/compare/7.8.0...7.9.0) (2025-10-30)
+
+
+### Features
+
+* add support for player notification center in README ([9866ed1](https://github.com/Cap-go/capacitor-native-audio/commit/9866ed194c56c191c10e310fbba1993d49fbf46e))
+
 ## [7.8.0](https://github.com/Cap-go/capacitor-native-audio/compare/7.7.8...7.8.0) (2025-10-30)
 
 

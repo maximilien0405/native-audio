@@ -51,7 +51,7 @@ import java.util.Map;
 )
 public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChangeListener {
 
-    private final String PLUGIN_VERSION = "";
+    private final String pluginVersion = "";
 
     public static final String TAG = "NativeAudio";
 
@@ -727,7 +727,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     public void getPluginVersion(final PluginCall call) {
         try {
             final JSObject ret = new JSObject();
-            ret.put("version", this.PLUGIN_VERSION);
+            ret.put("version", this.pluginVersion);
             call.resolve(ret);
         } catch (final Exception e) {
             call.reject("Could not get plugin version", e);

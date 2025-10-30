@@ -52,6 +52,7 @@ The only **free**, **full-featured** audio playback plugin for Capacitor:
 - **Position tracking** - Real-time currentTime events (100ms intervals)
 - **Modern package management** - Supports both Swift Package Manager (SPM) and CocoaPods (SPM-ready for Capacitor 8)
 - **Same JavaScript API** - Compatible interface with paid alternatives
+- **Support player notification center** - Play, pause, show cover for your user when long playing audio.
 
 Perfect for music players, podcast apps, games, meditation apps, and any audio-heavy application.
 

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.8.0](https://github.com/Cap-go/capacitor-native-audio/compare/7.7.8...7.8.0) (2025-10-30)
+
+
+### Features
+
+* add notification center support for audio playback metadata on iOS and Android ([5b1fb75](https://github.com/Cap-go/capacitor-native-audio/commit/5b1fb756fd96d9334684c89a0cd4e7eb0691491a))
+
 ## [7.7.8](https://github.com/Cap-go/capacitor-native-audio/compare/7.7.7...7.7.8) (2025-10-30)
 
 ## [7.7.7](https://github.com/Cap-go/capacitor-native-audio/compare/7.7.6...7.7.7) (2025-10-30)

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.7.7](https://github.com/Cap-go/capacitor-native-audio/compare/7.7.6...7.7.7) (2025-10-30)
+
+
+### Bug Fixes
+
+* pluginVersion lint issue ([96ad36b](https://github.com/Cap-go/capacitor-native-audio/commit/96ad36b08400cc1efb924de417b1a1d47e0e1003))
+
 ## [7.7.6](https://github.com/Cap-go/capacitor-native-audio/compare/7.7.5...7.7.6) (2025-10-29)
 
 

@@ -13,7 +13,7 @@ enum MyError: Error {
 // swiftlint:disable type_body_length file_length
 @objc(NativeAudio)
 public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
-    private let pluginVersion: String = "7.7.8"
+    private let pluginVersion: String = "7.8.0"
     public let identifier = "NativeAudio"
     public let jsName = "NativeAudio"
     public let pluginMethods: [CAPPluginMethod] = [

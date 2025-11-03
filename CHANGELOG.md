@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.9.1](https://github.com/Cap-go/capacitor-native-audio/compare/7.9.0...7.9.1) (2025-11-03)
+
+
+### Bug Fixes
+
+* **deps:** update dependency androidx.media:media to v1.7.1 ([#197](https://github.com/Cap-go/capacitor-native-audio/issues/197)) ([0470ffd](https://github.com/Cap-go/capacitor-native-audio/commit/0470ffd748c03a25ab276999eca11ae007417cfe))
+
 ## [7.9.0](https://github.com/Cap-go/capacitor-native-audio/compare/7.8.0...7.9.0) (2025-10-30)
 
 

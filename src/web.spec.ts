@@ -3,7 +3,7 @@ import { NativeAudio } from './web';
 export class Test {
   /**
    * @param assetId - some string to identify asset
-   * @param assetPath - path to ressource like `assets/sounds/bla.mp3`
+   * @param assetPath - path to resource like `assets/sounds/bla.mp3`
    */
   public start(assetId: string, assetPath: string): void {
     this.runLater(

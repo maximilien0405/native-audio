@@ -68,7 +68,7 @@ Mainteinance Status: Actively Maintained
 
 All audio files must be with the rest of your source files.
 
-First make your sound file end up in your builded code folder, example in folder `BUILDFOLDER/assets/sounds/FILENAME.mp3`
+First make your sound file end up in your built code folder, example in folder `BUILDFOLDER/assets/sounds/FILENAME.mp3`
 Then use it in preload like that `assets/sounds/FILENAME.mp3`
 
 ## Documentation

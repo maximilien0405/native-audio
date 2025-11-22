@@ -111,7 +111,13 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
         do {
             // Only set the category without immediately activating/deactivating
-            try self.session.setCategory(AVAudioSession.Category.playback, options: .mixWithOthers)
+            // Fix for issue #202: Check if showNotification is enabled
+            if self.showNotification {
+                // Use playback category with default mode for notification support
+                try self.session.setCategory(AVAudioSession.Category.playback, mode: .default)
+            } else {
+                try self.session.setCategory(AVAudioSession.Category.playback, options: .mixWithOthers)
+            }
             // Don't activate/deactivate in setup - we'll do this explicitly when needed
         } catch {
             print("Failed to setup audio session: \(error)")
@@ -254,7 +260,13 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         // Use a single audio session configuration block for better atomicity
         do {
             // Set category first
-            if focus {
+            // Fix for issue #202: When showNotification is enabled, use .playback without
+            // .mixWithOthers or .duckOthers to allow Now Playing info to display in
+            // Control Center and lock screen
+            if self.showNotification {
+                // Use playback category with default mode for notification support
+                try self.session.setCategory(AVAudioSession.Category.playback, mode: .default)
+            } else if focus {
                 try self.session.setCategory(AVAudioSession.Category.playback, options: .duckOthers)
             } else if !ignoreSilent {
                 try self.session.setCategory(AVAudioSession.Category.ambient, options: focus ? .duckOthers : .mixWithOthers)

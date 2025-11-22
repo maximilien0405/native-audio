@@ -39,7 +39,8 @@ public class RemoteAudioAsset extends AudioAsset {
     private Runnable currentTimeRunnable;
     private final Map<String, String> headers;
 
-    public RemoteAudioAsset(NativeAudio owner, String assetId, Uri uri, int audioChannelNum, float volume, Map<String, String> headers) throws Exception {
+    public RemoteAudioAsset(NativeAudio owner, String assetId, Uri uri, int audioChannelNum, float volume, Map<String, String> headers)
+        throws Exception {
         super(owner, assetId, null, 0, volume);
         this.uri = uri;
         this.volume = volume;
@@ -95,7 +96,7 @@ public class RemoteAudioAsset extends AudioAsset {
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15000)
             .setReadTimeoutMs(15000);
-        
+
         // Add custom headers if provided
         if (headers != null && !headers.isEmpty()) {
             httpDataSourceFactory.setDefaultRequestProperties(headers);

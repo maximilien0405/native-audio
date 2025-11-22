@@ -29,7 +29,8 @@ public class StreamAudioAsset extends AudioAsset {
     private static final long LIVE_OFFSET_MS = 5000; // 5 seconds behind live
     private final java.util.Map<String, String> headers;
 
-    public StreamAudioAsset(NativeAudio owner, String assetId, Uri uri, float volume, java.util.Map<String, String> headers) throws Exception {
+    public StreamAudioAsset(NativeAudio owner, String assetId, Uri uri, float volume, java.util.Map<String, String> headers)
+        throws Exception {
         super(owner, assetId, null, 0, volume);
         this.uri = uri;
         this.volume = volume;
@@ -75,7 +76,7 @@ public class StreamAudioAsset extends AudioAsset {
             .setConnectTimeoutMs(15000)
             .setReadTimeoutMs(15000)
             .setUserAgent("ExoPlayer");
-        
+
         // Add custom headers if provided
         if (headers != null && !headers.isEmpty()) {
             httpDataSourceFactory.setDefaultRequestProperties(headers);
@@ -222,7 +223,7 @@ public class StreamAudioAsset extends AudioAsset {
                     .setConnectTimeoutMs(15000)
                     .setReadTimeoutMs(15000)
                     .setUserAgent("ExoPlayer");
-                
+
                 // Add custom headers if provided
                 if (headers != null && !headers.isEmpty()) {
                     httpDataSourceFactory.setDefaultRequestProperties(headers);
@@ -472,7 +473,7 @@ public class StreamAudioAsset extends AudioAsset {
                         .setConnectTimeoutMs(15000)
                         .setReadTimeoutMs(15000)
                         .setUserAgent("ExoPlayer");
-                    
+
                     // Add custom headers if provided
                     if (headers != null && !headers.isEmpty()) {
                         httpDataSourceFactory.setDefaultRequestProperties(headers);

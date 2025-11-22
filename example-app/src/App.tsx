@@ -49,6 +49,13 @@ const App = () => {
   const [playingAsset, setPlayingAsset] = useState<AssetKey | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const playingAssetRef = useRef<AssetKey | null>(null);
+  
+  // Notification controls
+  const [showNotification, setShowNotification] = useState(false);
+  const [notificationTitle, setNotificationTitle] = useState('Native Audio Demo');
+  const [notificationArtist, setNotificationArtist] = useState('Capgo');
+  const [notificationAlbum, setNotificationAlbum] = useState('Test Album');
+  const [notificationArtworkUrl, setNotificationArtworkUrl] = useState('');
 
   useEffect(() => {
     playingAssetRef.current = playingAsset;
@@ -60,7 +67,13 @@ const App = () => {
 
     const setup = async () => {
       try {
-        await NativeAudio.configure({ focus: true, background: true, ignoreSilent: false, fade: false });
+        await NativeAudio.configure({ 
+          focus: true, 
+          background: true, 
+          ignoreSilent: false, 
+          fade: false,
+          showNotification
+        });
       } catch (error) {
         // Configure fails silently on web if permissions are missing; surface to UI instead
         setErrorMessage(normalizeError(error));
@@ -97,7 +110,7 @@ const App = () => {
       completeHandle?.remove();
       timeHandle?.remove();
     };
-  }, []);
+  }, [showNotification]);
 
   const activeDefinition = useMemo(() => assets[activeAsset], [activeAsset]);
   const activeStatus = assetState[activeAsset];
@@ -111,7 +124,13 @@ const App = () => {
         assetPath: definition.assetPath,
         isUrl: definition.isUrl,
         audioChannelNum: 1,
-        volume: volumeMap[key]
+        volume: volumeMap[key],
+        notificationMetadata: showNotification ? {
+          title: notificationTitle || definition.label,
+          artist: notificationArtist,
+          album: notificationAlbum,
+          artworkUrl: notificationArtworkUrl
+        } : undefined
       });
       const durationResult = await NativeAudio.getDuration({ assetId: definition.assetId }).catch(() => undefined);
       const duration = durationResult?.duration;
@@ -279,6 +298,63 @@ const App = () => {
       <p className="tagline">Interactive Capacitor example with local and remote audio assets.</p>
 
       <section className="panel">
+        <h2>Notification Settings (iOS Lock Screen / Control Center)</h2>
+        <p className="asset-description">
+          Test for <a href="https://github.com/Cap-go/capacitor-native-audio/issues/202" target="_blank" rel="noopener noreferrer">Issue #202</a>: 
+          Enable to show audio playback controls in Control Center and on the lock screen.
+        </p>
+        <div className="actions">
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={showNotification}
+              onChange={(e) => setShowNotification(e.target.checked)}
+            />
+            <span>Show Notification</span>
+          </label>
+        </div>
+        {showNotification && (
+          <div className="slider-group" style={{ marginTop: '16px' }}>
+            <label htmlFor="notif-title">Title</label>
+            <input 
+              id="notif-title"
+              type="text"
+              value={notificationTitle}
+              onChange={(e) => setNotificationTitle(e.target.value)}
+              placeholder="Track title"
+            />
+            
+            <label htmlFor="notif-artist" style={{ marginTop: '8px' }}>Artist</label>
+            <input 
+              id="notif-artist"
+              type="text"
+              value={notificationArtist}
+              onChange={(e) => setNotificationArtist(e.target.value)}
+              placeholder="Artist name"
+            />
+            
+            <label htmlFor="notif-album" style={{ marginTop: '8px' }}>Album</label>
+            <input 
+              id="notif-album"
+              type="text"
+              value={notificationAlbum}
+              onChange={(e) => setNotificationAlbum(e.target.value)}
+              placeholder="Album name"
+            />
+            
+            <label htmlFor="notif-artwork" style={{ marginTop: '8px' }}>Artwork URL</label>
+            <input 
+              id="notif-artwork"
+              type="text"
+              value={notificationArtworkUrl}
+              onChange={(e) => setNotificationArtworkUrl(e.target.value)}
+              placeholder="https://example.com/artwork.jpg"
+            />
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
         <h2>Choose Asset</h2>
         <div className="asset-selector">
           {Object.entries(assets).map(([key, definition]) => (
@@ -318,16 +394,19 @@ const App = () => {
           </button>
         </div>
         <div className="slider-group">
-          <label htmlFor="volume">Volume ({activeVolume.toFixed(2)})</label>
-          <input
-            id="volume"
-            type="range"
-            min="0.1"
-            max="1"
-            step="0.05"
-            value={activeVolume}
-            onChange={event => handleVolumeChange(activeAsset, event.target.value)}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', width: '100%' }}>
+            <label htmlFor="volume" style={{ flex: '0 0 auto', margin: 0 }}>Volume ({activeVolume.toFixed(2)})</label>
+            <input
+              id="volume"
+              type="range"
+              min="0.1"
+              max="1"
+              step="0.05"
+              value={activeVolume}
+              onChange={event => handleVolumeChange(activeAsset, event.target.value)}
+              style={{ flex: 1 }}
+            />
+          </div>
         </div>
         <div className="secondary-actions">
           <button type="button" onClick={toggleLoop} disabled={!playingAsset}>
@@ -360,6 +439,9 @@ const App = () => {
           <li>
             <strong>Duration:</strong>{' '}
             {typeof activeStatus.duration === 'number' ? `${activeStatus.duration.toFixed(2)}s` : 'Unknown'}
+          </li>
+          <li>
+            <strong>Notification:</strong> {showNotification ? 'Enabled' : 'Disabled'}
           </li>
         </ul>
         <p className="status-message">{statusMessage}</p>

@@ -256,7 +256,15 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             // Set category first
             // Fix for issue #202: When showNotification is enabled, use .playback without
             // .mixWithOthers or .duckOthers to allow Now Playing info to display in
-            // Control Center and lock screen
+            // Control Center and lock screen.
+            //
+            // IMPORTANT: This is a behavior trade-off:
+            // - With .playback + .default mode: Now Playing info shows, but interrupts other audio
+            // - With .mixWithOthers or .duckOthers: Audio mixes, but no Now Playing info
+            //
+            // This is required because iOS only shows Now Playing controls for audio sessions
+            // that use the .playback category without mixing options. This means the app becomes
+            // the primary audio source and will interrupt background music from other apps.
             if self.showNotification {
                 // Use playback category with default mode for notification support
                 try self.session.setCategory(AVAudioSession.Category.playback, mode: .default)

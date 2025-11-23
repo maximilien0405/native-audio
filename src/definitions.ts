@@ -129,7 +129,7 @@ export interface PreloadOptions {
    * Custom HTTP headers to include when fetching remote audio files.
    * Only used when isUrl is true and assetPath is a remote URL (http/https).
    * Example: { 'x-api-key': 'abc123', 'Authorization': 'Bearer token' }
-   * 
+   *
    * @since 7.10.0
    */
   headers?: Record<string, string>;

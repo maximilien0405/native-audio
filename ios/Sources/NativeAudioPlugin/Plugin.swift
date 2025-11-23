@@ -111,13 +111,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
         do {
             // Only set the category without immediately activating/deactivating
-            // Fix for issue #202: Check if showNotification is enabled
-            if self.showNotification {
-                // Use playback category with default mode for notification support
-                try self.session.setCategory(AVAudioSession.Category.playback, mode: .default)
-            } else {
-                try self.session.setCategory(AVAudioSession.Category.playback, options: .mixWithOthers)
-            }
+            try self.session.setCategory(AVAudioSession.Category.playback, options: .mixWithOthers)
             // Don't activate/deactivate in setup - we'll do this explicitly when needed
         } catch {
             print("Failed to setup audio session: \(error)")

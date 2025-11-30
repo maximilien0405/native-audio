@@ -310,8 +310,6 @@ public class RemoteAudioAsset extends AudioAsset {
 
     @Override
     public void unload() throws Exception {
-    @Override
-    public void unload() throws Exception {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             // Synchronous cleanup when already on the main thread
             stopCurrentTimeUpdates();
@@ -352,7 +350,6 @@ public class RemoteAudioAsset extends AudioAsset {
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
         }
-    }
     }
 
     @Override

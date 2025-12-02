@@ -28,6 +28,7 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
     // Maximum number of channels to prevent excessive resource usage
     private let maxChannels = Constant.MaxChannels
 
+    // Timers - must only be accessed from main thread
     private var currentTimeTimer: Timer?
     internal var fadeTimer: Timer?
 
@@ -87,11 +88,19 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
     }
 
     deinit {
-        currentTimeTimer?.invalidate()
-        currentTimeTimer = nil
+        // Invalidate timers - must be done on main thread
+        let currentTimer = currentTimeTimer
+        let fadeTimerRef = fadeTimer
 
-        fadeTimer?.invalidate()
-        fadeTimer = nil
+        if Thread.isMainThread {
+            currentTimer?.invalidate()
+            fadeTimerRef?.invalidate()
+        } else {
+            DispatchQueue.main.async {
+                currentTimer?.invalidate()
+                fadeTimerRef?.invalidate()
+            }
+        }
 
         // Clean up any players that might still be playing
         for player in channels {
@@ -269,11 +278,7 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
                         strongPlayer.volume = endVolume
                     }
                     timer.invalidate()
-
-                    // Update timer reference on main thread
-                    DispatchQueue.main.async {
-                        strongSelf.fadeTimer = nil
-                    }
+                    strongSelf.fadeTimer = nil
                 }
             }
 
@@ -283,12 +288,13 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
     }
 
     internal func stopFadeTimer() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-
-            if let timer = self.fadeTimer {
-                timer.invalidate()
-                self.fadeTimer = nil
+        if Thread.isMainThread {
+            fadeTimer?.invalidate()
+            fadeTimer = nil
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.fadeTimer?.invalidate()
+                self?.fadeTimer = nil
             }
         }
     }
@@ -469,9 +475,11 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let strongSelf = self else { return }
 
-            strongSelf.stopCurrentTimeUpdates() // Ensure no duplicate timers
+            // Stop existing timer first (we're on main thread now)
+            strongSelf.currentTimeTimer?.invalidate()
+            strongSelf.currentTimeTimer = nil
 
-            strongSelf.currentTimeTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
                 guard let strongSelf = self, let strongOwner = strongSelf.owner else {
                     self?.stopCurrentTimeUpdates()
                     return
@@ -483,18 +491,21 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
                     strongSelf.stopCurrentTimeUpdates()
                 }
             }
-            if let timer = strongSelf.currentTimeTimer {
-                RunLoop.current.add(timer, forMode: .common)
-            }
+
+            strongSelf.currentTimeTimer = timer
+            RunLoop.current.add(timer, forMode: .common)
         }
     }
 
     internal func stopCurrentTimeUpdates() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-
-            self.currentTimeTimer?.invalidate()
-            self.currentTimeTimer = nil
+        if Thread.isMainThread {
+            currentTimeTimer?.invalidate()
+            currentTimeTimer = nil
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.currentTimeTimer?.invalidate()
+                self?.currentTimeTimer = nil
+            }
         }
     }
 }

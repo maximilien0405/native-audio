@@ -80,7 +80,13 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
     NativeAudioWeb.AUDIO_ASSET_BY_ASSET_ID.set(options.assetId, new AudioAsset(audio));
   }
 
-  async playOnce(options: { assetPath: string; volume?: number; isUrl?: boolean; autoPlay?: boolean; deleteAfterPlay?: boolean }): Promise<{ assetId: string }> {
+  async playOnce(options: {
+    assetPath: string;
+    volume?: number;
+    isUrl?: boolean;
+    autoPlay?: boolean;
+    deleteAfterPlay?: boolean;
+  }): Promise<{ assetId: string }> {
     // Generate a unique temporary asset ID
     const assetId = `playOnce_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     this.playOnceAssets.add(assetId);
@@ -108,9 +114,7 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
           // Delete file if requested (Web can't actually delete files from disk)
           // This is a no-op on web, but we keep the interface consistent
           if (deleteAfterPlay && options.isUrl) {
-            console.warn(
-              '[NativeAudio] deleteAfterPlay is not supported on web platform. File deletion is ignored.'
-            );
+            console.warn('[NativeAudio] deleteAfterPlay is not supported on web platform. File deletion is ignored.');
           }
         } catch (error) {
           console.error('[NativeAudio] Error during playOnce cleanup:', error);
@@ -125,7 +129,7 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
         () => {
           cleanupHandler();
         },
-        { once: true }
+        { once: true },
       );
 
       // Auto-play if requested

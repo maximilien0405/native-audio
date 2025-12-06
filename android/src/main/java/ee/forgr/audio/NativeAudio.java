@@ -263,149 +263,161 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
     @PluginMethod
     public void playOnce(final PluginCall call) {
-        this.getActivity().runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    initSoundPool();
-
-                    // Generate unique temporary asset ID
-                    final String assetId = "playOnce_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
-
-                    // Extract options
-                    String assetPath = call.getString(ASSET_PATH);
-                    if (!isStringValid(assetPath)) {
-                        call.reject(ERROR_ASSET_PATH_MISSING);
-                        return;
-                    }
-
-                    boolean autoPlay = call.getBoolean("autoPlay", true);
-                    final boolean deleteAfterPlay = call.getBoolean("deleteAfterPlay", false);
-                    float volume = call.getFloat(VOLUME, 1F);
-                    boolean isLocalUrl = call.getBoolean("isUrl", false);
-                    int audioChannelNum = 1; // Single channel for playOnce
-
-                    // Track this as a playOnce asset
-                    playOnceAssets.add(assetId);
-
-                    // Store notification metadata if provided
-                    JSObject metadata = call.getObject(NOTIFICATION_METADATA);
-                    if (metadata != null) {
-                        Map<String, String> metadataMap = new HashMap<>();
-                        if (metadata.has("title")) metadataMap.put("title", metadata.getString("title"));
-                        if (metadata.has("artist")) metadataMap.put("artist", metadata.getString("artist"));
-                        if (metadata.has("album")) metadataMap.put("album", metadata.getString("album"));
-                        if (metadata.has("artworkUrl")) metadataMap.put("artworkUrl", metadata.getString("artworkUrl"));
-                        if (!metadataMap.isEmpty()) {
-                            notificationMetadataMap.put(assetId, metadataMap);
-                        }
-                    }
-
-                    // Preload the asset
-                    JSObject preloadOptions = new JSObject();
-                    preloadOptions.put(ASSET_ID, assetId);
-                    preloadOptions.put(ASSET_PATH, assetPath);
-                    preloadOptions.put(VOLUME, volume);
-                    preloadOptions.put(AUDIO_CHANNEL_NUM, audioChannelNum);
-                    preloadOptions.put("isUrl", isLocalUrl);
-                    if (call.hasOption("headers")) {
-                        preloadOptions.put("headers", call.getObject("headers"));
-                    }
-
-                    // Create a mock call for preload
-                    PluginCall preloadCall = new PluginCall(call.getMessageHandler(), call.getPluginId(), call.getCallbackId(), call.getMethodName(), preloadOptions);
-
+        this.getActivity().runOnUiThread(
+            new Runnable() {
+                @Override
+                public void run() {
                     try {
-                        preloadAsset(preloadCall);
+                        initSoundPool();
 
-                        // Get the loaded asset
-                        AudioAsset asset = audioAssetList.get(assetId);
-                        if (asset == null) {
-                            throw new Exception("Failed to preload asset");
+                        // Generate unique temporary asset ID
+                        final String assetId =
+                            "playOnce_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
+
+                        // Extract options
+                        String assetPath = call.getString(ASSET_PATH);
+                        if (!isStringValid(assetPath)) {
+                            call.reject(ERROR_ASSET_PATH_MISSING);
+                            return;
                         }
 
-                        // Store the file path if we need to delete it later
-                        final String filePathToDelete;
-                        if (deleteAfterPlay && isLocalUrl) {
-                            filePathToDelete = assetPath;
-                        } else {
-                            filePathToDelete = null;
+                        boolean autoPlay = call.getBoolean("autoPlay", true);
+                        final boolean deleteAfterPlay = call.getBoolean("deleteAfterPlay", false);
+                        float volume = call.getFloat(VOLUME, 1F);
+                        boolean isLocalUrl = call.getBoolean("isUrl", false);
+                        int audioChannelNum = 1; // Single channel for playOnce
+
+                        // Track this as a playOnce asset
+                        playOnceAssets.add(assetId);
+
+                        // Store notification metadata if provided
+                        JSObject metadata = call.getObject(NOTIFICATION_METADATA);
+                        if (metadata != null) {
+                            Map<String, String> metadataMap = new HashMap<>();
+                            if (metadata.has("title")) metadataMap.put("title", metadata.getString("title"));
+                            if (metadata.has("artist")) metadataMap.put("artist", metadata.getString("artist"));
+                            if (metadata.has("album")) metadataMap.put("album", metadata.getString("album"));
+                            if (metadata.has("artworkUrl")) metadataMap.put("artworkUrl", metadata.getString("artworkUrl"));
+                            if (!metadataMap.isEmpty()) {
+                                notificationMetadataMap.put(assetId, metadataMap);
+                            }
                         }
 
-                        // Set up completion listener for automatic cleanup
-                        asset.setCompletionListener(new AudioCompletionListener() {
-                            @Override
-                            public void onCompletion(String completedAssetId) {
-                                // Call the original completion dispatcher first
-                                dispatchComplete(completedAssetId);
+                        // Preload the asset
+                        JSObject preloadOptions = new JSObject();
+                        preloadOptions.put(ASSET_ID, assetId);
+                        preloadOptions.put(ASSET_PATH, assetPath);
+                        preloadOptions.put(VOLUME, volume);
+                        preloadOptions.put(AUDIO_CHANNEL_NUM, audioChannelNum);
+                        preloadOptions.put("isUrl", isLocalUrl);
+                        if (call.hasOption("headers")) {
+                            preloadOptions.put("headers", call.getObject("headers"));
+                        }
 
-                                // Then perform cleanup
-                                getActivity().runOnUiThread(new Runnable() {
+                        // Create a mock call for preload
+                        PluginCall preloadCall = new PluginCall(
+                            call.getMessageHandler(),
+                            call.getPluginId(),
+                            call.getCallbackId(),
+                            call.getMethodName(),
+                            preloadOptions
+                        );
+
+                        try {
+                            preloadAsset(preloadCall);
+
+                            // Get the loaded asset
+                            AudioAsset asset = audioAssetList.get(assetId);
+                            if (asset == null) {
+                                throw new Exception("Failed to preload asset");
+                            }
+
+                            // Store the file path if we need to delete it later
+                            final String filePathToDelete;
+                            if (deleteAfterPlay && isLocalUrl) {
+                                filePathToDelete = assetPath;
+                            } else {
+                                filePathToDelete = null;
+                            }
+
+                            // Set up completion listener for automatic cleanup
+                            asset.setCompletionListener(
+                                new AudioCompletionListener() {
                                     @Override
-                                    public void run() {
-                                        try {
-                                            // Unload the asset
-                                            AudioAsset assetToUnload = audioAssetList.get(assetId);
-                                            if (assetToUnload != null) {
-                                                assetToUnload.unload();
-                                                audioAssetList.remove(assetId);
-                                            }
+                                    public void onCompletion(String completedAssetId) {
+                                        // Call the original completion dispatcher first
+                                        dispatchComplete(completedAssetId);
 
-                                            // Remove from tracking sets
-                                            playOnceAssets.remove(assetId);
-                                            notificationMetadataMap.remove(assetId);
+                                        // Then perform cleanup
+                                        getActivity().runOnUiThread(
+                                            new Runnable() {
+                                                @Override
+                                                public void run() {
+                                                    try {
+                                                        // Unload the asset
+                                                        AudioAsset assetToUnload = audioAssetList.get(assetId);
+                                                        if (assetToUnload != null) {
+                                                            assetToUnload.unload();
+                                                            audioAssetList.remove(assetId);
+                                                        }
 
-                                            // Clear notification if this was the currently playing asset
-                                            if (assetId.equals(currentlyPlayingAssetId)) {
-                                                clearNotification();
-                                                currentlyPlayingAssetId = null;
-                                            }
+                                                        // Remove from tracking sets
+                                                        playOnceAssets.remove(assetId);
+                                                        notificationMetadataMap.remove(assetId);
 
-                                            // Delete file if requested
-                                            if (filePathToDelete != null) {
-                                                try {
-                                                    File fileToDelete = new File(URI.create(filePathToDelete));
-                                                    if (fileToDelete.exists() && fileToDelete.delete()) {
-                                                        Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
+                                                        // Clear notification if this was the currently playing asset
+                                                        if (assetId.equals(currentlyPlayingAssetId)) {
+                                                            clearNotification();
+                                                            currentlyPlayingAssetId = null;
+                                                        }
+
+                                                        // Delete file if requested
+                                                        if (filePathToDelete != null) {
+                                                            try {
+                                                                File fileToDelete = new File(URI.create(filePathToDelete));
+                                                                if (fileToDelete.exists() && fileToDelete.delete()) {
+                                                                    Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
+                                                                }
+                                                            } catch (Exception e) {
+                                                                Log.e(TAG, "Error deleting file after playOnce: " + e.getMessage());
+                                                            }
+                                                        }
+                                                    } catch (Exception e) {
+                                                        Log.e(TAG, "Error during playOnce cleanup: " + e.getMessage());
                                                     }
-                                                } catch (Exception e) {
-                                                    Log.e(TAG, "Error deleting file after playOnce: " + e.getMessage());
                                                 }
                                             }
-                                        } catch (Exception e) {
-                                            Log.e(TAG, "Error during playOnce cleanup: " + e.getMessage());
-                                        }
+                                        );
                                     }
-                                });
+                                }
+                            );
+
+                            // Auto-play if requested
+                            if (autoPlay) {
+                                asset.play();
                             }
-                        });
 
-                        // Auto-play if requested
-                        if (autoPlay) {
-                            asset.play();
+                            // Return the generated assetId
+                            JSObject result = new JSObject();
+                            result.put(ASSET_ID, assetId);
+                            call.resolve(result);
+                        } catch (Exception ex) {
+                            // Cleanup on failure
+                            playOnceAssets.remove(assetId);
+                            notificationMetadataMap.remove(assetId);
+                            AudioAsset failedAsset = audioAssetList.get(assetId);
+                            if (failedAsset != null) {
+                                failedAsset.unload();
+                                audioAssetList.remove(assetId);
+                            }
+                            call.reject("Failed to load asset for playOnce: " + ex.getMessage());
                         }
-
-                        // Return the generated assetId
-                        JSObject result = new JSObject();
-                        result.put(ASSET_ID, assetId);
-                        call.resolve(result);
-
                     } catch (Exception ex) {
-                        // Cleanup on failure
-                        playOnceAssets.remove(assetId);
-                        notificationMetadataMap.remove(assetId);
-                        AudioAsset failedAsset = audioAssetList.get(assetId);
-                        if (failedAsset != null) {
-                            failedAsset.unload();
-                            audioAssetList.remove(assetId);
-                        }
-                        call.reject("Failed to load asset for playOnce: " + ex.getMessage());
+                        call.reject(ex.getMessage());
                     }
-                } catch (Exception ex) {
-                    call.reject(ex.getMessage());
                 }
             }
-        });
+        );
     }
 
     @PluginMethod

@@ -256,27 +256,27 @@ export interface NativeAudio {
   preload(options: PreloadOptions): Promise<void>;
   /**
    * Play an audio file once with automatic cleanup
-   * 
+   *
    * Method designed for simple, single-shot audio playback,
    * such as notification sounds, UI feedback, or other short audio clips
    * that don't require manual state management.
-   * 
+   *
    * **Key Features:**
    * - **Fire-and-forget**: No need to manually preload, play, stop, or unload
    * - **Auto-cleanup**: Asset is automatically unloaded after playback completes
    * - **Optional file deletion**: Can delete local files after playback (useful for temp files)
    * - **Returns assetId**: Can still control playback if needed (pause, stop, etc.)
-   * 
+   *
    * **Use Cases:**
    * - Notification sounds
    * - UI sound effects (button clicks, alerts)
    * - Short audio clips that play once
    * - Temporary audio files that should be cleaned up
-   * 
+   *
    * **Comparison with regular play():**
    * - `play()`: Requires manual preload, play, and unload steps
    * - `playOnce()`: Handles everything automatically with a single call
-   * 
+   *
    * @example
    * ```typescript
    * // Simple one-shot playback
@@ -297,7 +297,7 @@ export interface NativeAudio {
    * // Later, you can stop it manually if needed
    * await NativeAudio.stop({ assetId });
    * ```
-   * 
+   *
    * @since 7.11.0
    * @param options {@link PlayOnceOptions}
    * @returns {Promise<PlayOnceResult>} Object containing the generated assetId

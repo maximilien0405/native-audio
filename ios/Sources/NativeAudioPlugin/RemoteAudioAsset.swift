@@ -100,6 +100,9 @@ public class RemoteAudioAsset: AudioAsset {
             self.owner?.notifyListeners("complete", data: [
                 "assetId": self.assetId
             ])
+
+            // Invoke completion callback if set
+            self.onComplete?()
         }
     }
 

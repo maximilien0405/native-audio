@@ -20,6 +20,7 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
     var initialVolume: Float = 1.0
     var fadeDelay: Float = 1.0
     weak var owner: NativeAudio?
+    var onComplete: (() -> Void)?
 
     // Constants for fade effect
     let FADESTEP: Float = 0.05
@@ -443,6 +444,9 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
             self.owner?.notifyListeners("complete", data: [
                 "assetId": self.assetId
             ])
+
+            // Invoke completion callback if set
+            self.onComplete?()
 
             // Notify the owner that this player finished
             // The owner will check if any other assets are still playing

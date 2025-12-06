@@ -362,7 +362,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
                             // Store the file path if we need to delete it later
                             final String filePathToDelete;
-                            if (deleteAfterPlay && isLocalUrl) {
+                            if (deleteAfterPlay && isLocalUrl && assetPath.startsWith("file://")) {
                                 filePathToDelete = assetPath;
                             } else {
                                 filePathToDelete = null;
@@ -872,18 +872,18 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     }
 
     /**
-         * Create an AudioAsset for the given identifier and path, supporting remote URLs (including HLS),
-         * local file URIs, and assets in the app's public folder.
-         *
-         * @param assetId         unique identifier for the asset
-         * @param assetPath       file path or URL to the audio resource
-         * @param isLocalUrl      true when assetPath is a URL (http/https/file), false when it refers to a public asset path
-         * @param volume          initial playback volume (expected range: 0.1 to 1.0)
-         * @param audioChannelNum number of audio channels to configure for the asset
-         * @param headersObj      optional HTTP headers for remote requests (may be null)
-         * @return                an initialized AudioAsset instance for the provided path
-         * @throws Exception      if the asset cannot be located or initialized (includes missing file, invalid path, or other load errors)
-         */
+     * Create an AudioAsset for the given identifier and path, supporting remote URLs (including HLS),
+     * local file URIs, and assets in the app's public folder.
+     *
+     * @param assetId         unique identifier for the asset
+     * @param assetPath       file path or URL to the audio resource
+     * @param isLocalUrl      true when assetPath is a URL (http/https/file), false when it refers to a public asset path
+     * @param volume          initial playback volume (expected range: 0.1 to 1.0)
+     * @param audioChannelNum number of audio channels to configure for the asset
+     * @param headersObj      optional HTTP headers for remote requests (may be null)
+     * @return                an initialized AudioAsset instance for the provided path
+     * @throws Exception      if the asset cannot be located or initialized (includes missing file, invalid path, or other load errors)
+     */
     private AudioAsset loadAudioAsset(
         String assetId,
         String assetPath,

@@ -112,7 +112,7 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
 
           // Delete file if requested (Web can't actually delete files from disk)
           // This is a no-op on web, but we keep the interface consistent
-          if (deleteAfterPlay && options.isUrl) {
+          if (deleteAfterPlay) {
             console.warn('[NativeAudio] deleteAfterPlay is not supported on web platform. File deletion is ignored.');
           }
         } catch (error) {

@@ -478,8 +478,7 @@ const App = () => {
                   autoPlay: false
                 });
                 setStatusMessage(`Preloaded with assetId: ${result.assetId}. Not auto-playing. You can manually play it.`);
-                // Demonstrate manual control
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                // Asset is already preloaded, play immediately
                 await NativeAudio.play({ assetId: result.assetId });
                 setStatusMessage(`Manually started playback for ${result.assetId}. Will auto-cleanup on completion.`);
               } catch (error) {

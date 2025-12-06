@@ -298,7 +298,7 @@ await NativeAudio.playOnce({
 });
 ```
 
-**Advanced: Manual Control**
+#### Advanced: Manual Control
 
 ```typescript
 // Get assetId for manual control before auto-cleanup

@@ -1,7 +1,7 @@
 import { WebPlugin } from '@capacitor/core';
 
 import { AudioAsset } from './audio-asset';
-import type { ConfigureOptions, PreloadOptions } from './definitions';
+import type { ConfigureOptions, PlayOnceOptions, PlayOnceResult, PreloadOptions } from './definitions';
 import { NativeAudio } from './definitions';
 
 export class NativeAudioWeb extends WebPlugin implements NativeAudio {
@@ -79,13 +79,7 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
     NativeAudioWeb.AUDIO_ASSET_BY_ASSET_ID.set(options.assetId, new AudioAsset(audio));
   }
 
-  async playOnce(options: {
-    assetPath: string;
-    volume?: number;
-    isUrl?: boolean;
-    autoPlay?: boolean;
-    deleteAfterPlay?: boolean;
-  }): Promise<{ assetId: string }> {
+  async playOnce(options: PlayOnceOptions): Promise<PlayOnceResult> {
     // Generate a unique temporary asset ID
     const assetId = `playOnce_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     NativeAudioWeb.playOnceAssets.add(assetId);

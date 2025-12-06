@@ -434,9 +434,12 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
         }
     }
 
-    /**
-     * AVAudioPlayerDelegate method called when playback finishes
-     */
+    /// Handles an AVAudioPlayer finishing playback by notifying listeners, invoking the public completion callback, and forwarding the completion to the owner.
+    /// 
+    /// This is called when a player finishes playing; the notifications and callback are dispatched on the audio queue. Notifications are sent to listeners with the asset's `assetId`, then `onComplete` is invoked if set, and finally the event is forwarded to the owner.
+    /// - Parameters:
+    ///   - player: The `AVAudioPlayer` instance that finished playback.
+    ///   - flag: `true` if playback finished successfully, `false` otherwise.
     public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         owner?.executeOnAudioQueue { [weak self] in
             guard let self = self else { return }

@@ -90,6 +90,10 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     // Track playOnce assets for automatic cleanup
     private Set<String> playOnceAssets = new HashSet<>();
 
+    /**
+     * Initializes plugin runtime state by obtaining the system AudioManager, preparing the asset map,
+     * and recording the device's original audio mode without requesting audio focus.
+     */
     @Override
     public void load() {
         super.load();
@@ -249,6 +253,11 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             .start();
     }
 
+    /**
+     * Initiates preloading of an audio asset described by the plugin call.
+     *
+     * @param call the PluginCall containing preload options (for example `assetId`, `assetPath`, `isUrl`, `isComplex`, headers, and optional notification metadata); the call will be resolved or rejected when the preload operation completes.
+     */
     @PluginMethod
     public void preload(final PluginCall call) {
         this.getActivity().runOnUiThread(
@@ -262,29 +271,21 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     }
 
     /**
-     * Plays an audio file once with automatic cleanup after completion.
+     * Play an audio asset a single time and automatically remove its resources when finished.
      *
-     * <p>This is a convenience method that combines preload, play, and unload into a single call.
-     * The audio asset is automatically cleaned up after playback completes or if an error occurs.
+     * <p>Preloads the specified asset, optionally starts playback immediately, and ensures the
+     * asset is unloaded and any associated notification metadata are cleared after completion or on
+     * error. Supports local file paths and remote URLs, HLS streams when available, custom HTTP
+     * headers for remote requests, and optional deletion of local source files after playback.
      *
-     * <p>Supported features:
-     * <ul>
-     *   <li>Local files (file:// URLs) and remote URLs (http/https)</li>
-     *   <li>HLS streaming (.m3u8 files) on supported devices</li>
-     *   <li>Custom HTTP headers for remote files</li>
-     *   <li>Optional file deletion after playback (local files only)</li>
-     *   <li>Automatic resource cleanup on completion or error</li>
-     * </ul>
-     *
-     * @param call The Capacitor plugin call containing:
-     *   <ul>
-     *     <li>assetPath (required): Path to the audio file</li>
-     *     <li>volume (optional): Playback volume 0.1-1.0, default 1.0</li>
-     *     <li>isUrl (optional): Whether assetPath is a URL, default false</li>
-     *     <li>autoPlay (optional): Start playback immediately, default true</li>
-     *     <li>deleteAfterPlay (optional): Delete file after playback, default false</li>
-     *     <li>headers (optional): Custom HTTP headers for remote files</li>
-     *   </ul>
+     * @param call Capacitor PluginCall containing options:
+     *             - "assetPath" (required): path or URL to the audio file;
+     *             - "volume" (optional): playback volume (0.1–1.0), default 1.0;
+     *             - "isUrl" (optional): treat assetPath as a URL when true, default false;
+     *             - "autoPlay" (optional): start playback immediately when true, default true;
+     *             - "deleteAfterPlay" (optional): delete the local file after playback when true, default false;
+     *             - "headers" (optional): JS object of HTTP headers for remote requests;
+     *             - "notificationMetadata" (optional): object with "title", "artist", "album", "artworkUrl" for notification display.
      */
     @PluginMethod
     public void playOnce(final PluginCall call) {
@@ -293,6 +294,15 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
         this.getActivity().runOnUiThread(
             new Runnable() {
+                /**
+                 * Preloads a temporary audio asset, optionally plays it one time, and schedules automatic cleanup when playback completes.
+                 *
+                 * <p>The method generates a unique temporary assetId, validates options (path, volume, local/remote, headers),
+                 * loads the asset into the plugin's asset map, registers completion listeners to dispatch the completion event
+                 * and to unload/remove notification metadata and tracking state, and optionally deletes the source file from
+                 * safe application directories after playback. If configured, it also updates the media notification and returns
+                 * the generated `assetId` to the caller.
+                 */
                 @Override
                 public void run() {
                     try {
@@ -509,6 +519,15 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         );
     }
 
+    /**
+     * Starts playback of a preloaded audio asset on the main (UI) thread.
+     *
+     * The PluginCall must include:
+     * - "assetId" (String): identifier of the preloaded asset to play.
+     * - Optional "time" (number): start position in seconds.
+     *
+     * @param call the PluginCall containing playback parameters
+     */
     @PluginMethod
     public void play(final PluginCall call) {
         this.getActivity().runOnUiThread(
@@ -835,6 +854,14 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         notifyListeners("complete", ret);
     }
 
+    /**
+     * Emits a "currentTime" event for the given asset with the playback position rounded to the nearest 0.1 second.
+     *
+     * The emitted event payload contains `assetId` and `currentTime` (in seconds, rounded to the nearest 0.1).
+     *
+     * @param assetId     the identifier of the audio asset
+     * @param currentTime the current playback time in seconds (will be rounded to nearest 0.1)
+     */
     public void notifyCurrentTime(String assetId, double currentTime) {
         // Round to nearest 100ms
         double roundedTime = Math.round(currentTime * 10.0) / 10.0;
@@ -845,28 +872,18 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     }
 
     /**
-     * Helper method to load an audio asset from various sources.
-     *
-     * <p>This method handles the common logic for loading audio assets from:
-     * <ul>
-     *   <li>Remote URLs (http/https) - creates RemoteAudioAsset</li>
-     *   <li>HLS streams (.m3u8) - creates StreamAudioAsset via reflection if available</li>
-     *   <li>Local files (file:// URLs) - creates standard AudioAsset</li>
-     *   <li>Public folder assets - creates standard AudioAsset with "public/" prefix</li>
-     * </ul>
-     *
-     * <p>This method is used by both {@link #playOnce(PluginCall)} and {@link #preloadAsset(PluginCall)}
-     * to eliminate code duplication.
-     *
-     * @param assetId The unique identifier for this audio asset
-     * @param assetPath Path to the audio file or URL
-     * @param isLocalUrl Whether the assetPath is a URL (true) or local file path (false)
-     * @param volume Playback volume (0.1 to 1.0)
-     * @param audioChannelNum Number of audio channels
-     * @param headersObj Custom HTTP headers for remote files (can be null)
-     * @return The created AudioAsset instance
-     * @throws Exception If asset loading fails, with descriptive error message
-     */
+         * Create an AudioAsset for the given identifier and path, supporting remote URLs (including HLS),
+         * local file URIs, and assets in the app's public folder.
+         *
+         * @param assetId         unique identifier for the asset
+         * @param assetPath       file path or URL to the audio resource
+         * @param isLocalUrl      true when assetPath is a URL (http/https/file), false when it refers to a public asset path
+         * @param volume          initial playback volume (expected range: 0.1 to 1.0)
+         * @param audioChannelNum number of audio channels to configure for the asset
+         * @param headersObj      optional HTTP headers for remote requests (may be null)
+         * @return                an initialized AudioAsset instance for the provided path
+         * @throws Exception      if the asset cannot be located or initialized (includes missing file, invalid path, or other load errors)
+         */
     private AudioAsset loadAudioAsset(
         String assetId,
         String assetPath,
@@ -963,6 +980,30 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         }
     }
 
+    /**
+     * Preloads an audio asset into the plugin's asset list.
+     *
+     * <p>The provided PluginCall must include:
+     * <ul>
+     *   <li>`assetId` (string) — identifier for the asset</li>
+     *   <li>`assetPath` (string) — path or URL to the audio resource</li>
+     * </ul>
+     * Optional keys on the call:
+     * <ul>
+     *   <li>`isUrl` (boolean) — true when `assetPath` is a remote URL</li>
+     *   <li>`isComplex` (boolean) — when true, `volume` and `audioChannelNum` may be provided</li>
+     *   <li>`volume` (number) — initial playback volume (default 1.0)</li>
+     *   <li>`audioChannelNum` (int) — audio channel count (default 1)</li>
+     *   <li>`headers` (object) — HTTP headers for remote requests</li>
+     *   <li>`notificationMetadata` (object) — optional metadata (`title`, `artist`, `album`, `artworkUrl`) to attach to the asset</li>
+     * </ul>
+     *
+     * <p>On success the call is resolved with a status indicating success. The method rejects the call
+     * when required parameters are missing, when an asset with the same id already exists, or when
+     * the asset cannot be loaded.
+     *
+     * @param call the PluginCall containing asset parameters and options
+     */
     private void preloadAsset(PluginCall call) {
         float volume = 1F;
         int audioChannelNum = 1;

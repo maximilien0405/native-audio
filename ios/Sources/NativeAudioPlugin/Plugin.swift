@@ -505,7 +505,6 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             
             // Set up completion handler
             asset.onComplete = { [weak self] in
-                self?.notifyListeners("complete", data: ["assetId": assetId])
                 cleanupHandler()
             }
             

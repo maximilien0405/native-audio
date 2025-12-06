@@ -126,7 +126,7 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
       audio.addEventListener(
         'error',
         () => {
-          cleanupHandler().catch(error => {
+          cleanupHandler().catch((error) => {
             console.error('[NativeAudio] Error during error cleanup:', error);
           });
         },

@@ -370,10 +370,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                 var filePathToDelete: String?
                 if deleteAfterPlay && isLocalUrl {
                     // Try to get the file path from the asset
-                    if let audioAsset = asset as? AudioAsset, !asset.channels.isEmpty {
-                        if let url = asset.channels.first?.url {
-                            filePathToDelete = url.path
-                        }
+                    if let url = asset.channels.first?.url {
+                        filePathToDelete = url.path
                     }
                 }
                 

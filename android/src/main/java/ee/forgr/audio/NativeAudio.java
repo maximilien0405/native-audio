@@ -306,118 +306,24 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                             }
                         }
 
-                        // Preload the asset directly without creating a mock PluginCall
+                        // Preload the asset using the helper method
                         try {
-                            // Inline preload logic
+                            // Check if asset already exists
                             if (plugin.audioAssetList.containsKey(assetId)) {
                                 throw new Exception(ERROR_AUDIO_EXISTS + " - " + assetId);
                             }
 
-                            if (isLocalUrl) {
-                                Uri uri = Uri.parse(assetPath);
-                                if (uri.getScheme() != null && (uri.getScheme().equals("http") || uri.getScheme().equals("https"))) {
-                                    // Remote URL
-                                    Map<String, String> requestHeaders = null;
-                                    JSObject headersObj = call.getObject("headers");
-                                    if (headersObj != null) {
-                                        requestHeaders = new HashMap<>();
-                                        for (Iterator<String> it = headersObj.keys(); it.hasNext(); ) {
-                                            String key = it.next();
-                                            try {
-                                                String value = headersObj.getString(key);
-                                                if (value != null) {
-                                                    requestHeaders.put(key, value);
-                                                }
-                                            } catch (Exception e) {
-                                                Log.w("AudioPlugin", "Skipping non-string header: " + key);
-                                            }
-                                        }
-                                    }
-
-                                    if (assetPath.endsWith(".m3u8")) {
-                                        // HLS Stream - try to create using helper method
-                                        AudioAsset streamAudioAsset = plugin.createStreamAudioAsset(assetId, uri, volume, requestHeaders);
-                                        if (streamAudioAsset != null) {
-                                            plugin.audioAssetList.put(assetId, streamAudioAsset);
-                                        } else {
-                                            // Fall back to RemoteAudioAsset when HLS is not available
-                                            Log.w(TAG, "HLS not available for .m3u8, falling back to RemoteAudioAsset");
-                                            RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(
-                                                plugin,
-                                                assetId,
-                                                uri,
-                                                audioChannelNum,
-                                                volume,
-                                                requestHeaders
-                                            );
-                                            remoteAudioAsset.setCompletionListener(plugin::dispatchComplete);
-                                            plugin.audioAssetList.put(assetId, remoteAudioAsset);
-                                        }
-                                    } else {
-                                        RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(
-                                            plugin,
-                                            assetId,
-                                            uri,
-                                            audioChannelNum,
-                                            volume,
-                                            requestHeaders
-                                        );
-                                        remoteAudioAsset.setCompletionListener(plugin::dispatchComplete);
-                                        plugin.audioAssetList.put(assetId, remoteAudioAsset);
-                                    }
-                                } else if (uri.getScheme() != null && uri.getScheme().equals("file")) {
-                                    File file = new File(uri.getPath());
-                                    if (!file.exists()) {
-                                        throw new Exception(ERROR_ASSET_PATH_MISSING + " - " + assetPath);
-                                    }
-                                    ParcelFileDescriptor pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
-                                    AssetFileDescriptor afd = new AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH);
-                                    AudioAsset asset = new AudioAsset(plugin, assetId, afd, audioChannelNum, volume);
-                                    asset.setCompletionListener(plugin::dispatchComplete);
-                                    plugin.audioAssetList.put(assetId, asset);
-                                } else {
-                                    // Handle unexpected URI schemes by attempting to treat as local file
-                                    try {
-                                        File file = new File(uri.getPath());
-                                        if (!file.exists()) {
-                                            throw new Exception(ERROR_ASSET_PATH_MISSING + " - " + assetPath);
-                                        }
-                                        ParcelFileDescriptor pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
-                                        AssetFileDescriptor afd = new AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH);
-                                        AudioAsset asset = new AudioAsset(plugin, assetId, afd, audioChannelNum, volume);
-                                        asset.setCompletionListener(plugin::dispatchComplete);
-                                        plugin.audioAssetList.put(assetId, asset);
-                                        Log.w(TAG, "Unexpected URI scheme '" + uri.getScheme() + "' treated as local file: " + assetPath);
-                                    } catch (Exception e) {
-                                        throw new Exception(
-                                            "Failed to load asset with unexpected URI scheme '" +
-                                                uri.getScheme() +
-                                                "' (expected 'http', 'https', or 'file'). Asset path: " +
-                                                assetPath +
-                                                ". Error: " +
-                                                e.getMessage()
-                                        );
-                                    }
-                                }
-                            } else {
-                                // Handle asset in public folder
-                                String finalAssetPath = assetPath;
-                                if (!assetPath.startsWith("public/")) {
-                                    finalAssetPath = "public/" + assetPath;
-                                }
-                                Context ctx = plugin.getContext().getApplicationContext();
-                                AssetManager am = ctx.getResources().getAssets();
-                                AssetFileDescriptor assetFileDescriptor = am.openFd(finalAssetPath);
-                                AudioAsset asset = new AudioAsset(plugin, assetId, assetFileDescriptor, audioChannelNum, volume);
-                                asset.setCompletionListener(plugin::dispatchComplete);
-                                plugin.audioAssetList.put(assetId, asset);
-                            }
-
-                            // Get the loaded asset
-                            AudioAsset asset = plugin.audioAssetList.get(assetId);
+                            // Load the asset using the helper method
+                            JSObject headersObj = call.getObject("headers");
+                            AudioAsset asset = plugin.loadAudioAsset(assetId, assetPath, isLocalUrl, volume, audioChannelNum, headersObj);
+                            
                             if (asset == null) {
-                                throw new Exception("Failed to preload asset");
+                                throw new Exception("Failed to load asset");
                             }
+
+                            // Set completion listener and add to asset list
+                            asset.setCompletionListener(plugin::dispatchComplete);
+                            plugin.audioAssetList.put(assetId, asset);
 
                             // Store the file path if we need to delete it later
                             final String filePathToDelete;
@@ -461,81 +367,54 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                                                             }
 
                                                             // Delete file if requested (with safety checks)
-                                                            // if (filePathToDelete != null) {
-                                                            //     try {
-                                                            //         File fileToDelete;
-                                                            //         try {
-                                                            //             // Try to parse as URI first
-                                                            //             fileToDelete = new File(URI.create(filePathToDelete));
-                                                            //         } catch (IllegalArgumentException e) {
-                                                            //             // If URI parsing fails, treat as raw file path
-                                                            //             Log.d(TAG, "Invalid URI format, using raw path: " + filePathToDelete, e);
-                                                            //             fileToDelete = new File(filePathToDelete);
-                                                            //         }
-
-                                                            //         // Validate the file is within safe directories
-                                                            //         String canonicalPath = fileToDelete.getCanonicalPath();
-                                                            //         String cacheDir = plugin.getContext().getCacheDir().getCanonicalPath();
-                                                            //         String filesDir = plugin.getContext().getFilesDir().getCanonicalPath();
-                                                            //         String externalCacheDir = plugin.getContext().getExternalCacheDir() != null ?
-                                                            //             plugin.getContext().getExternalCacheDir().getCanonicalPath() : null;
-                                                            //         String externalFilesDir = plugin.getContext().getExternalFilesDir(null) != null ?
-                                                            //             plugin.getContext().getExternalFilesDir(null).getCanonicalPath() : null;
-
-                                                            //         // Check if file is in a safe directory
-                                                            //         boolean isSafe = canonicalPath.startsWith(cacheDir) ||
-                                                            //                         canonicalPath.startsWith(filesDir) ||
-                                                            //                         (externalCacheDir != null && canonicalPath.startsWith(externalCacheDir)) ||
-                                                            //                         (externalFilesDir != null && canonicalPath.startsWith(externalFilesDir));
-
-                                                            //         if (!isSafe) {
-                                                            //             Log.w(TAG, "Skipping file deletion: path outside safe directories - " + canonicalPath);
-                                                            //             return;
-                                                            //         }
-
-                                                            //         // Additional check: prevent deletion of directories
-                                                            //         if (fileToDelete.isDirectory()) {
-                                                            //             Log.w(TAG, "Skipping file deletion: path is a directory - " + canonicalPath);
-                                                            //             return;
-                                                            //         }
-
-                                                            //         if (fileToDelete.exists() && fileToDelete.delete()) {
-                                                            //             Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
-                                                            //         } else {
-                                                            //             Log.w(TAG, "File does not exist or deletion failed: " + filePathToDelete);
-                                                            //         }
-                                                            //     } catch (Exception e) {
-                                                            //         Log.e(TAG, "Error deleting file after playOnce: " + filePathToDelete, e);
-                                                            //     }
-                                                            // }
                                                             if (filePathToDelete != null) {
                                                                 try {
-                                                                    File fileToDelete = new File(new URI(filePathToDelete));
+                                                                    File fileToDelete;
+                                                                    try {
+                                                                        // Try to parse as URI first
+                                                                        fileToDelete = new File(URI.create(filePathToDelete));
+                                                                    } catch (IllegalArgumentException e) {
+                                                                        // If URI parsing fails, treat as raw file path
+                                                                        Log.d(TAG, "Invalid URI format, using raw path: " + filePathToDelete);
+                                                                        fileToDelete = new File(filePathToDelete);
+                                                                    }
 
                                                                     // Validate the file is within safe directories
                                                                     String canonicalPath = fileToDelete.getCanonicalPath();
-                                                                    String cacheDir = getContext().getCacheDir().getCanonicalPath();
-                                                                    String filesDir = getContext().getFilesDir().getCanonicalPath();
-                                                                    String externalCacheDir = getContext().getExternalCacheDir() != null
-                                                                        ? getContext().getExternalCacheDir().getCanonicalPath()
+                                                                    String cacheDir = plugin.getContext().getCacheDir().getCanonicalPath();
+                                                                    String filesDir = plugin.getContext().getFilesDir().getCanonicalPath();
+                                                                    String externalCacheDir = plugin.getContext().getExternalCacheDir() != null
+                                                                        ? plugin.getContext().getExternalCacheDir().getCanonicalPath()
+                                                                        : null;
+                                                                    String externalFilesDir = plugin.getContext().getExternalFilesDir(null) != null
+                                                                        ? plugin.getContext().getExternalFilesDir(null).getCanonicalPath()
                                                                         : null;
 
+                                                                    // Check if file is in a safe directory
                                                                     boolean isSafe =
                                                                         canonicalPath.startsWith(cacheDir) ||
                                                                         canonicalPath.startsWith(filesDir) ||
-                                                                        (externalCacheDir != null &&
-                                                                            canonicalPath.startsWith(externalCacheDir));
+                                                                        (externalCacheDir != null && canonicalPath.startsWith(externalCacheDir)) ||
+                                                                        (externalFilesDir != null && canonicalPath.startsWith(externalFilesDir));
 
                                                                     if (!isSafe) {
-                                                                        Log.w(TAG, "Skipping file deletion: path outside safe directories");
+                                                                        Log.w(TAG, "Skipping file deletion: path outside safe directories - " + canonicalPath);
+                                                                        return;
+                                                                    }
+
+                                                                    // Additional check: prevent deletion of directories
+                                                                    if (fileToDelete.isDirectory()) {
+                                                                        Log.w(TAG, "Skipping file deletion: path is a directory - " + canonicalPath);
                                                                         return;
                                                                     }
 
                                                                     if (fileToDelete.exists() && fileToDelete.delete()) {
                                                                         Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
+                                                                    } else {
+                                                                        Log.w(TAG, "File does not exist or deletion failed: " + filePathToDelete);
                                                                     }
                                                                 } catch (Exception e) {
-                                                                    Log.e(TAG, "Error deleting file after playOnce: " + e.getMessage());
+                                                                    Log.e(TAG, "Error deleting file after playOnce: " + filePathToDelete, e);
                                                                 }
                                                             }
                                                         } catch (Exception e) {
@@ -917,6 +796,114 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         notifyListeners("currentTime", ret);
     }
 
+    /**
+     * Helper method to load an audio asset (local or remote) without resolving/rejecting a PluginCall.
+     * Returns the created AudioAsset or null on failure.
+     * Throws Exception with descriptive error message on failure.
+     */
+    private AudioAsset loadAudioAsset(
+        String assetId,
+        String assetPath,
+        boolean isLocalUrl,
+        float volume,
+        int audioChannelNum,
+        JSObject headersObj
+    ) throws Exception {
+        if (isLocalUrl) {
+            Uri uri = Uri.parse(assetPath);
+            if (uri.getScheme() != null && (uri.getScheme().equals("http") || uri.getScheme().equals("https"))) {
+                // Remote URL
+                Map<String, String> requestHeaders = null;
+                if (headersObj != null) {
+                    requestHeaders = new HashMap<>();
+                    for (Iterator<String> it = headersObj.keys(); it.hasNext(); ) {
+                        String key = it.next();
+                        try {
+                            String value = headersObj.getString(key);
+                            if (value != null) {
+                                requestHeaders.put(key, value);
+                            }
+                        } catch (Exception e) {
+                            Log.w("AudioPlugin", "Skipping non-string header: " + key);
+                        }
+                    }
+                }
+
+                if (assetPath.endsWith(".m3u8")) {
+                    // HLS Stream - try to create using helper method
+                    AudioAsset streamAudioAsset = createStreamAudioAsset(assetId, uri, volume, requestHeaders);
+                    if (streamAudioAsset != null) {
+                        return streamAudioAsset;
+                    } else {
+                        // Fall back to RemoteAudioAsset when HLS is not available
+                        Log.w(TAG, "HLS not available for .m3u8, falling back to RemoteAudioAsset");
+                        RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(
+                            this,
+                            assetId,
+                            uri,
+                            audioChannelNum,
+                            volume,
+                            requestHeaders
+                        );
+                        return remoteAudioAsset;
+                    }
+                } else {
+                    RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(
+                        this,
+                        assetId,
+                        uri,
+                        audioChannelNum,
+                        volume,
+                        requestHeaders
+                    );
+                    return remoteAudioAsset;
+                }
+            } else if (uri.getScheme() != null && uri.getScheme().equals("file")) {
+                File file = new File(uri.getPath());
+                if (!file.exists()) {
+                    throw new Exception(ERROR_ASSET_PATH_MISSING + " - " + assetPath);
+                }
+                ParcelFileDescriptor pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+                AssetFileDescriptor afd = new AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH);
+                AudioAsset asset = new AudioAsset(this, assetId, afd, audioChannelNum, volume);
+                return asset;
+            } else {
+                // Handle unexpected URI schemes by attempting to treat as local file
+                try {
+                    File file = new File(uri.getPath());
+                    if (!file.exists()) {
+                        throw new Exception(ERROR_ASSET_PATH_MISSING + " - " + assetPath);
+                    }
+                    ParcelFileDescriptor pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+                    AssetFileDescriptor afd = new AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH);
+                    AudioAsset asset = new AudioAsset(this, assetId, afd, audioChannelNum, volume);
+                    Log.w(TAG, "Unexpected URI scheme '" + uri.getScheme() + "' treated as local file: " + assetPath);
+                    return asset;
+                } catch (Exception e) {
+                    throw new Exception(
+                        "Failed to load asset with unexpected URI scheme '" +
+                            uri.getScheme() +
+                            "' (expected 'http', 'https', or 'file'). Asset path: " +
+                            assetPath +
+                            ". Error: " +
+                            e.getMessage()
+                    );
+                }
+            }
+        } else {
+            // Handle asset in public folder
+            String finalAssetPath = assetPath;
+            if (!assetPath.startsWith("public/")) {
+                finalAssetPath = "public/" + assetPath;
+            }
+            Context ctx = getContext().getApplicationContext();
+            AssetManager am = ctx.getResources().getAssets();
+            AssetFileDescriptor assetFileDescriptor = am.openFd(finalAssetPath);
+            AudioAsset asset = new AudioAsset(this, assetId, assetFileDescriptor, audioChannelNum, volume);
+            return asset;
+        }
+    }
+
     private void preloadAsset(PluginCall call) {
         float volume = 1F;
         int audioChannelNum = 1;
@@ -966,105 +953,19 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                 }
             }
 
-            if (isLocalUrl) {
-                try {
-                    Uri uri = Uri.parse(assetPath);
-                    if (uri.getScheme() != null && (uri.getScheme().equals("http") || uri.getScheme().equals("https"))) {
-                        // Remote URL
-                        Log.d("AudioPlugin", "Debug: Remote URL detected: " + uri.toString());
-
-                        // Extract headers if provided
-                        Map<String, String> requestHeaders = null;
-                        JSObject headersObj = call.getObject("headers");
-                        if (headersObj != null) {
-                            requestHeaders = new HashMap<>();
-                            for (Iterator<String> it = headersObj.keys(); it.hasNext(); ) {
-                                String key = it.next();
-                                try {
-                                    String value = headersObj.getString(key);
-                                    if (value != null) {
-                                        requestHeaders.put(key, value);
-                                    }
-                                } catch (Exception e) {
-                                    Log.w("AudioPlugin", "Skipping non-string header: " + key);
-                                }
-                            }
-                        }
-
-                        if (assetPath.endsWith(".m3u8")) {
-                            // HLS Stream - check if HLS support is available
-                            if (!HlsAvailabilityChecker.isHlsAvailable()) {
-                                call.reject(
-                                    "HLS streaming (.m3u8) is not available. " +
-                                        "The media3-exoplayer-hls dependency is not included. " +
-                                        "To enable HLS support, set 'hls: true' in capacitor.config.ts under NativeAudio plugin config " +
-                                        "and run 'npx cap sync'. This will increase APK size by ~4MB."
-                                );
-                                return;
-                            }
-                            // HLS Stream - create via reflection to allow compile-time exclusion
-                            AudioAsset streamAudioAsset = createStreamAudioAsset(audioId, uri, volume, requestHeaders);
-                            if (streamAudioAsset == null) {
-                                call.reject("Failed to create HLS stream player. HLS support may not be properly configured.");
-                                return;
-                            }
-                            audioAssetList.put(audioId, streamAudioAsset);
-                            call.resolve(status);
-                        } else {
-                            // Regular remote audio
-                            RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(
-                                this,
-                                audioId,
-                                uri,
-                                audioChannelNum,
-                                volume,
-                                requestHeaders
-                            );
-                            remoteAudioAsset.setCompletionListener(this::dispatchComplete);
-                            audioAssetList.put(audioId, remoteAudioAsset);
-                            call.resolve(status);
-                        }
-                    } else if (uri.getScheme() != null && uri.getScheme().equals("file")) {
-                        // Local file URL
-                        Log.d("AudioPlugin", "Debug: Local file URL detected");
-                        File file = new File(uri.getPath());
-                        if (!file.exists()) {
-                            Log.e("AudioPlugin", "Error: File does not exist - " + file.getAbsolutePath());
-                            call.reject(ERROR_ASSET_PATH_MISSING + " - " + assetPath);
-                            return;
-                        }
-                        ParcelFileDescriptor pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
-                        AssetFileDescriptor afd = new AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH);
-                        AudioAsset asset = new AudioAsset(this, audioId, afd, audioChannelNum, volume);
-                        asset.setCompletionListener(this::dispatchComplete);
-                        audioAssetList.put(audioId, asset);
-                        call.resolve(status);
-                    } else {
-                        throw new IllegalArgumentException("Invalid URL scheme: " + uri.getScheme());
-                    }
-                } catch (Exception e) {
-                    Log.e("AudioPlugin", "Error handling URL", e);
-                    call.reject("Error handling URL: " + e.getMessage());
-                }
-            } else {
-                // Handle asset in public folder
-                Log.d("AudioPlugin", "Debug: Handling asset in public folder");
-                if (!assetPath.startsWith("public/")) {
-                    assetPath = "public/" + assetPath;
-                }
-                try {
-                    Context ctx = getContext().getApplicationContext();
-                    AssetManager am = ctx.getResources().getAssets();
-                    AssetFileDescriptor assetFileDescriptor = am.openFd(assetPath);
-                    AudioAsset asset = new AudioAsset(this, audioId, assetFileDescriptor, audioChannelNum, volume);
-                    asset.setCompletionListener(this::dispatchComplete);
-                    audioAssetList.put(audioId, asset);
-                    call.resolve(status);
-                } catch (IOException e) {
-                    Log.e("AudioPlugin", "Error opening asset: " + assetPath, e);
-                    call.reject(ERROR_ASSET_PATH_MISSING + " - " + assetPath);
-                }
+            // Use the helper method to load the asset
+            JSObject headersObj = call.getObject("headers");
+            AudioAsset asset = loadAudioAsset(audioId, assetPath, isLocalUrl, volume, audioChannelNum, headersObj);
+            
+            if (asset == null) {
+                call.reject("Failed to load asset");
+                return;
             }
+
+            // Set completion listener and add to asset list
+            asset.setCompletionListener(this::dispatchComplete);
+            audioAssetList.put(audioId, asset);
+            call.resolve(status);
         } catch (Exception ex) {
             Log.e("AudioPlugin", "Error in preloadAsset", ex);
             call.reject("Error in preloadAsset: " + ex.getMessage());

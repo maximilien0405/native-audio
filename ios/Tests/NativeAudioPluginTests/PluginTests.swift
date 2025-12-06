@@ -560,19 +560,20 @@ class PluginTests: XCTestCase {
         plugin.playOnce(call)
         
         plugin.executeOnAudioQueue {
+            // Capture any assetId that might have been created
+            let initialAssetIds = self.plugin.playOnceAssets
             
             // Wait for error handling
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.plugin.executeOnAudioQueue {
                     // Verify cleanup occurred even on failure
-                    let hasPlayOnceAssets = !self.plugin.playOnceAssets.isEmpty
+                    // playOnceAssets should be empty after failure
+                    XCTAssertTrue(self.plugin.playOnceAssets.isEmpty, "playOnceAssets should be empty after failure")
                     
-                    // If an asset was created but failed, it should be cleaned up
-                    if hasPlayOnceAssets {
-                        if let assetId = self.plugin.playOnceAssets.first {
-                            // Asset should not exist in audioList after failure
-                            XCTAssertNil(self.plugin.audioList[assetId], "Failed asset should be cleaned up")
-                        }
+                    // If an asset was created but failed, verify it's cleaned up from both collections
+                    for assetId in initialAssetIds {
+                        XCTAssertNil(self.plugin.audioList[assetId], "Failed asset should be removed from audioList")
+                        XCTAssertFalse(self.plugin.playOnceAssets.contains(assetId), "Failed asset should be removed from playOnceAssets")
                     }
                     
                     expectation.fulfill()

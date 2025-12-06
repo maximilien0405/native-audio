@@ -394,12 +394,19 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             }
         }
         
+        // Helper to clean up on failure
+        func cleanupOnFailure(assetId: String) {
+            self.playOnceAssets.remove(assetId)
+            self.notificationMetadataMap.removeValue(forKey: assetId)
+        }
+        
         // Inline preload logic directly (avoid creating mock PluginCall)
         audioQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
             
             // Check if asset already exists
             if self.audioList[assetId] != nil {
+                cleanupOnFailure(assetId: assetId)
                 call.reject(Constant.ErrorAssetAlreadyLoaded + " - " + assetId)
                 return
             }
@@ -423,6 +430,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                         )
                         self.audioList[assetId] = audioAsset
                     } else {
+                        cleanupOnFailure(assetId: assetId)
                         call.reject(Constant.ErrorAssetPath + " - " + assetPath)
                         return
                     }
@@ -470,6 +478,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                     )
                     self.audioList[assetId] = audioAsset
                 } else {
+                    cleanupOnFailure(assetId: assetId)
                     call.reject(Constant.ErrorAssetPath + " - " + assetPath)
                     return
                 }
@@ -489,6 +498,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                     )
                     self.audioList[assetId] = audioAsset
                 } else {
+                    cleanupOnFailure(assetId: assetId)
                     call.reject(Constant.ErrorAssetPath + " - " + assetPath)
                     return
                 }
@@ -497,8 +507,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             // Get the loaded asset
             guard let asset = self.audioList[assetId] as? AudioAsset else {
                 // Cleanup on failure
-                self.playOnceAssets.remove(assetId)
-                self.notificationMetadataMap.removeValue(forKey: assetId)
+                cleanupOnFailure(assetId: assetId)
                 call.reject("Failed to load asset for playOnce")
                 return
             }

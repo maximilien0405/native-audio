@@ -325,23 +325,24 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             return
         }
         
-        // Store notification metadata if provided
+        // Parse notification metadata if provided (on main thread)
+        var metadataDict: [String: String]?
         if let metadata = call.getObject(Constant.NotificationMetadata) {
-            var metadataDict: [String: String] = [:]
+            var tempDict: [String: String] = [:]
             if let title = metadata["title"] as? String {
-                metadataDict["title"] = title
+                tempDict["title"] = title
             }
             if let artist = metadata["artist"] as? String {
-                metadataDict["artist"] = artist
+                tempDict["artist"] = artist
             }
             if let album = metadata["album"] as? String {
-                metadataDict["album"] = album
+                tempDict["album"] = album
             }
             if let artworkUrl = metadata["artworkUrl"] as? String {
-                metadataDict["artworkUrl"] = artworkUrl
+                tempDict["artworkUrl"] = artworkUrl
             }
-            if !metadataDict.isEmpty {
-                notificationMetadataMap[assetId] = metadataDict
+            if !tempDict.isEmpty {
+                metadataDict = tempDict
             }
         }
         
@@ -350,9 +351,12 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             setupAudioSession()
         }
         
-        // Track this as a playOnce asset
+        // Track this as a playOnce asset and store metadata (thread-safe)
         audioQueue.sync(flags: .barrier) {
             self.playOnceAssets.insert(assetId)
+            if let metadata = metadataDict {
+                self.notificationMetadataMap[assetId] = metadata
+            }
         }
         
         // Create a completion handler for cleanup

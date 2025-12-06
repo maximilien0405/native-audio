@@ -422,12 +422,21 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                                                         // Delete file if requested
                                                         if (filePathToDelete != null) {
                                                             try {
-                                                                File fileToDelete = new File(URI.create(filePathToDelete));
+                                                                File fileToDelete;
+                                                                try {
+                                                                    // Try to parse as URI first
+                                                                    fileToDelete = new File(URI.create(filePathToDelete));
+                                                                } catch (IllegalArgumentException e) {
+                                                                    // If URI parsing fails, treat as raw file path
+                                                                    Log.d(TAG, "Invalid URI format, using raw path: " + filePathToDelete, e);
+                                                                    fileToDelete = new File(filePathToDelete);
+                                                                }
+                                                                
                                                                 if (fileToDelete.exists() && fileToDelete.delete()) {
                                                                     Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
                                                                 }
                                                             } catch (Exception e) {
-                                                                Log.e(TAG, "Error deleting file after playOnce: " + e.getMessage());
+                                                                Log.e(TAG, "Error deleting file after playOnce: " + filePathToDelete, e);
                                                             }
                                                         }
                                                     } catch (Exception e) {

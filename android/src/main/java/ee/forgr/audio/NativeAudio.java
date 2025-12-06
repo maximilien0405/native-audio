@@ -263,12 +263,15 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
     @PluginMethod
     public void playOnce(final PluginCall call) {
+        // Capture plugin reference for use in inner classes
+        final NativeAudio plugin = this;
+        
         this.getActivity().runOnUiThread(
             new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        initSoundPool();
+                        plugin.initSoundPool();
 
                         // Generate unique temporary asset ID
                         final String assetId =
@@ -276,7 +279,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
                         // Extract options
                         String assetPath = call.getString(ASSET_PATH);
-                        if (!isStringValid(assetPath)) {
+                        if (!plugin.isStringValid(assetPath)) {
                             call.reject(ERROR_ASSET_PATH_MISSING);
                             return;
                         }
@@ -288,7 +291,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                         int audioChannelNum = 1; // Single channel for playOnce
 
                         // Track this as a playOnce asset
-                        playOnceAssets.add(assetId);
+                        plugin.playOnceAssets.add(assetId);
 
                         // Store notification metadata if provided
                         JSObject metadata = call.getObject(NOTIFICATION_METADATA);
@@ -299,35 +302,80 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                             if (metadata.has("album")) metadataMap.put("album", metadata.getString("album"));
                             if (metadata.has("artworkUrl")) metadataMap.put("artworkUrl", metadata.getString("artworkUrl"));
                             if (!metadataMap.isEmpty()) {
-                                notificationMetadataMap.put(assetId, metadataMap);
+                                plugin.notificationMetadataMap.put(assetId, metadataMap);
                             }
                         }
 
-                        // Preload the asset
-                        JSObject preloadOptions = new JSObject();
-                        preloadOptions.put(ASSET_ID, assetId);
-                        preloadOptions.put(ASSET_PATH, assetPath);
-                        preloadOptions.put(VOLUME, volume);
-                        preloadOptions.put(AUDIO_CHANNEL_NUM, audioChannelNum);
-                        preloadOptions.put("isUrl", isLocalUrl);
-                        if (call.hasOption("headers")) {
-                            preloadOptions.put("headers", call.getObject("headers"));
-                        }
-
-                        // Create a mock call for preload
-                        PluginCall preloadCall = new PluginCall(
-                            call.getMessageHandler(),
-                            call.getPluginId(),
-                            call.getCallbackId(),
-                            call.getMethodName(),
-                            preloadOptions
-                        );
-
+                        // Preload the asset directly without creating a mock PluginCall
                         try {
-                            preloadAsset(preloadCall);
+                            // Inline preload logic
+                            if (plugin.audioAssetList.containsKey(assetId)) {
+                                throw new Exception(ERROR_AUDIO_EXISTS + " - " + assetId);
+                            }
+
+                            if (isLocalUrl) {
+                                Uri uri = Uri.parse(assetPath);
+                                if (uri.getScheme() != null && (uri.getScheme().equals("http") || uri.getScheme().equals("https"))) {
+                                    // Remote URL
+                                    Map<String, String> requestHeaders = null;
+                                    JSObject headersObj = call.getObject("headers");
+                                    if (headersObj != null) {
+                                        requestHeaders = new HashMap<>();
+                                        for (Iterator<String> it = headersObj.keys(); it.hasNext(); ) {
+                                            String key = it.next();
+                                            try {
+                                                String value = headersObj.getString(key);
+                                                if (value != null) {
+                                                    requestHeaders.put(key, value);
+                                                }
+                                            } catch (Exception e) {
+                                                Log.w("AudioPlugin", "Skipping non-string header: " + key);
+                                            }
+                                        }
+                                    }
+
+                                    if (assetPath.endsWith(".m3u8")) {
+                                        StreamAudioAsset streamAudioAsset = new StreamAudioAsset(plugin, assetId, uri, volume, requestHeaders);
+                                        plugin.audioAssetList.put(assetId, streamAudioAsset);
+                                    } else {
+                                        RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(
+                                            plugin,
+                                            assetId,
+                                            uri,
+                                            audioChannelNum,
+                                            volume,
+                                            requestHeaders
+                                        );
+                                        remoteAudioAsset.setCompletionListener(plugin::dispatchComplete);
+                                        plugin.audioAssetList.put(assetId, remoteAudioAsset);
+                                    }
+                                } else if (uri.getScheme() != null && uri.getScheme().equals("file")) {
+                                    File file = new File(uri.getPath());
+                                    if (!file.exists()) {
+                                        throw new Exception(ERROR_ASSET_PATH_MISSING + " - " + assetPath);
+                                    }
+                                    ParcelFileDescriptor pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+                                    AssetFileDescriptor afd = new AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH);
+                                    AudioAsset asset = new AudioAsset(plugin, assetId, afd, audioChannelNum, volume);
+                                    asset.setCompletionListener(plugin::dispatchComplete);
+                                    plugin.audioAssetList.put(assetId, asset);
+                                }
+                            } else {
+                                // Handle asset in public folder
+                                String finalAssetPath = assetPath;
+                                if (!assetPath.startsWith("public/")) {
+                                    finalAssetPath = "public/" + assetPath;
+                                }
+                                Context ctx = plugin.getContext().getApplicationContext();
+                                AssetManager am = ctx.getResources().getAssets();
+                                AssetFileDescriptor assetFileDescriptor = am.openFd(finalAssetPath);
+                                AudioAsset asset = new AudioAsset(plugin, assetId, assetFileDescriptor, audioChannelNum, volume);
+                                asset.setCompletionListener(plugin::dispatchComplete);
+                                plugin.audioAssetList.put(assetId, asset);
+                            }
 
                             // Get the loaded asset
-                            AudioAsset asset = audioAssetList.get(assetId);
+                            AudioAsset asset = plugin.audioAssetList.get(assetId);
                             if (asset == null) {
                                 throw new Exception("Failed to preload asset");
                             }
@@ -346,29 +394,29 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                                     @Override
                                     public void onCompletion(String completedAssetId) {
                                         // Call the original completion dispatcher first
-                                        dispatchComplete(completedAssetId);
+                                        plugin.dispatchComplete(completedAssetId);
 
                                         // Then perform cleanup
-                                        getActivity().runOnUiThread(
+                                        plugin.getActivity().runOnUiThread(
                                             new Runnable() {
                                                 @Override
                                                 public void run() {
                                                     try {
                                                         // Unload the asset
-                                                        AudioAsset assetToUnload = audioAssetList.get(assetId);
+                                                        AudioAsset assetToUnload = plugin.audioAssetList.get(assetId);
                                                         if (assetToUnload != null) {
                                                             assetToUnload.unload();
-                                                            audioAssetList.remove(assetId);
+                                                            plugin.audioAssetList.remove(assetId);
                                                         }
 
                                                         // Remove from tracking sets
-                                                        playOnceAssets.remove(assetId);
-                                                        notificationMetadataMap.remove(assetId);
+                                                        plugin.playOnceAssets.remove(assetId);
+                                                        plugin.notificationMetadataMap.remove(assetId);
 
                                                         // Clear notification if this was the currently playing asset
-                                                        if (assetId.equals(currentlyPlayingAssetId)) {
-                                                            clearNotification();
-                                                            currentlyPlayingAssetId = null;
+                                                        if (assetId.equals(plugin.currentlyPlayingAssetId)) {
+                                                            plugin.clearNotification();
+                                                            plugin.currentlyPlayingAssetId = null;
                                                         }
 
                                                         // Delete file if requested
@@ -394,7 +442,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
                             // Auto-play if requested
                             if (autoPlay) {
-                                asset.play();
+                                asset.play(0.0);
                             }
 
                             // Return the generated assetId
@@ -403,12 +451,12 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                             call.resolve(result);
                         } catch (Exception ex) {
                             // Cleanup on failure
-                            playOnceAssets.remove(assetId);
-                            notificationMetadataMap.remove(assetId);
-                            AudioAsset failedAsset = audioAssetList.get(assetId);
+                            plugin.playOnceAssets.remove(assetId);
+                            plugin.notificationMetadataMap.remove(assetId);
+                            AudioAsset failedAsset = plugin.audioAssetList.get(assetId);
                             if (failedAsset != null) {
                                 failedAsset.unload();
-                                audioAssetList.remove(assetId);
+                                plugin.audioAssetList.remove(assetId);
                             }
                             call.reject("Failed to load asset for playOnce: " + ex.getMessage());
                         }

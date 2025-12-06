@@ -316,7 +316,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                             // Load the asset using the helper method
                             JSObject headersObj = call.getObject("headers");
                             AudioAsset asset = plugin.loadAudioAsset(assetId, assetPath, isLocalUrl, volume, audioChannelNum, headersObj);
-                            
+
                             if (asset == null) {
                                 throw new Exception("Failed to load asset");
                             }
@@ -375,7 +375,10 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                                                                         fileToDelete = new File(URI.create(filePathToDelete));
                                                                     } catch (IllegalArgumentException e) {
                                                                         // If URI parsing fails, treat as raw file path
-                                                                        Log.d(TAG, "Invalid URI format, using raw path: " + filePathToDelete);
+                                                                        Log.d(
+                                                                            TAG,
+                                                                            "Invalid URI format, using raw path: " + filePathToDelete
+                                                                        );
                                                                         fileToDelete = new File(filePathToDelete);
                                                                     }
 
@@ -383,10 +386,14 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                                                                     String canonicalPath = fileToDelete.getCanonicalPath();
                                                                     String cacheDir = plugin.getContext().getCacheDir().getCanonicalPath();
                                                                     String filesDir = plugin.getContext().getFilesDir().getCanonicalPath();
-                                                                    String externalCacheDir = plugin.getContext().getExternalCacheDir() != null
+                                                                    String externalCacheDir = plugin.getContext().getExternalCacheDir() !=
+                                                                        null
                                                                         ? plugin.getContext().getExternalCacheDir().getCanonicalPath()
                                                                         : null;
-                                                                    String externalFilesDir = plugin.getContext().getExternalFilesDir(null) != null
+                                                                    String externalFilesDir = plugin
+                                                                            .getContext()
+                                                                            .getExternalFilesDir(null) !=
+                                                                        null
                                                                         ? plugin.getContext().getExternalFilesDir(null).getCanonicalPath()
                                                                         : null;
 
@@ -394,27 +401,43 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                                                                     boolean isSafe =
                                                                         canonicalPath.startsWith(cacheDir) ||
                                                                         canonicalPath.startsWith(filesDir) ||
-                                                                        (externalCacheDir != null && canonicalPath.startsWith(externalCacheDir)) ||
-                                                                        (externalFilesDir != null && canonicalPath.startsWith(externalFilesDir));
+                                                                        (externalCacheDir != null &&
+                                                                            canonicalPath.startsWith(externalCacheDir)) ||
+                                                                        (externalFilesDir != null &&
+                                                                            canonicalPath.startsWith(externalFilesDir));
 
                                                                     if (!isSafe) {
-                                                                        Log.w(TAG, "Skipping file deletion: path outside safe directories - " + canonicalPath);
+                                                                        Log.w(
+                                                                            TAG,
+                                                                            "Skipping file deletion: path outside safe directories - " +
+                                                                                canonicalPath
+                                                                        );
                                                                         return;
                                                                     }
 
                                                                     // Additional check: prevent deletion of directories
                                                                     if (fileToDelete.isDirectory()) {
-                                                                        Log.w(TAG, "Skipping file deletion: path is a directory - " + canonicalPath);
+                                                                        Log.w(
+                                                                            TAG,
+                                                                            "Skipping file deletion: path is a directory - " + canonicalPath
+                                                                        );
                                                                         return;
                                                                     }
 
                                                                     if (fileToDelete.exists() && fileToDelete.delete()) {
                                                                         Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
                                                                     } else {
-                                                                        Log.w(TAG, "File does not exist or deletion failed: " + filePathToDelete);
+                                                                        Log.w(
+                                                                            TAG,
+                                                                            "File does not exist or deletion failed: " + filePathToDelete
+                                                                        );
                                                                     }
                                                                 } catch (Exception e) {
-                                                                    Log.e(TAG, "Error deleting file after playOnce: " + filePathToDelete, e);
+                                                                    Log.e(
+                                                                        TAG,
+                                                                        "Error deleting file after playOnce: " + filePathToDelete,
+                                                                        e
+                                                                    );
                                                                 }
                                                             }
                                                         } catch (Exception e) {
@@ -848,14 +871,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                         return remoteAudioAsset;
                     }
                 } else {
-                    RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(
-                        this,
-                        assetId,
-                        uri,
-                        audioChannelNum,
-                        volume,
-                        requestHeaders
-                    );
+                    RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(this, assetId, uri, audioChannelNum, volume, requestHeaders);
                     return remoteAudioAsset;
                 }
             } else if (uri.getScheme() != null && uri.getScheme().equals("file")) {
@@ -956,7 +972,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             // Use the helper method to load the asset
             JSObject headersObj = call.getObject("headers");
             AudioAsset asset = loadAudioAsset(audioId, assetPath, isLocalUrl, volume, audioChannelNum, headersObj);
-            
+
             if (asset == null) {
                 call.reject("Failed to load asset");
                 return;

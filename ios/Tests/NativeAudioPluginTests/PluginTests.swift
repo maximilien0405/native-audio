@@ -313,14 +313,16 @@ class PluginTests: XCTestCase {
 
     func testPlayOnceWithAutoPlay() {
         let expectation = XCTestExpectation(description: "PlayOnce with auto-play")
+        var returnedAssetId: String?
         
         let call = CAPPluginCall(callbackId: "test", options: [
             "assetPath": tempFileURL.path,
             "volume": 1.0,
             "isUrl": true,
             "autoPlay": true
-        ], success: { (_, _) in
-            // Success case
+        ], success: { (result, _) in
+            // Capture the returned assetId
+            returnedAssetId = result?.data?["assetId"] as? String
         }, error: { (_) in
             XCTFail("PlayOnce shouldn't fail")
         })!
@@ -335,6 +337,14 @@ class PluginTests: XCTestCase {
                 self.plugin.executeOnAudioQueue {
                     let playOnceAssets = self.plugin.playOnceAssets
                     XCTAssertTrue(playOnceAssets.count > 0, "Should have created a playOnce asset")
+                    
+                    // Verify the returned assetId matches an entry in playOnceAssets and audioList
+                    if let assetId = returnedAssetId {
+                        XCTAssertTrue(playOnceAssets.contains(assetId), "Returned assetId should be in playOnceAssets")
+                        XCTAssertNotNil(self.plugin.audioList[assetId], "Returned assetId should have corresponding AudioAsset")
+                    } else {
+                        XCTFail("Should have returned an assetId")
+                    }
                     
                     expectation.fulfill()
                 }
@@ -373,6 +383,11 @@ class PluginTests: XCTestCase {
                        let asset = self.plugin.audioList[assetId] as? AudioAsset {
                         // Verify asset exists but is not automatically playing
                         XCTAssertFalse(asset.channels.isEmpty, "Asset should have channels")
+                        
+                        // Verify player is not playing when autoPlay is false
+                        if let player = asset.channels.first {
+                            XCTAssertFalse(player.isPlaying, "Player should not be playing when autoPlay is false")
+                        }
                     }
                     
                     expectation.fulfill()
@@ -443,7 +458,17 @@ class PluginTests: XCTestCase {
         let deletableURL = URL(fileURLWithPath: deletableFilePath)
         
         // Copy test file to deletable location
-        try? FileManager.default.copyItem(at: tempFileURL, to: deletableURL)
+        do {
+            // Remove existing file if present
+            if FileManager.default.fileExists(atPath: deletableFilePath) {
+                try FileManager.default.removeItem(at: deletableURL)
+            }
+            try FileManager.default.copyItem(at: tempFileURL, to: deletableURL)
+        } catch {
+            XCTFail("Failed to set up deletable file: \(error)")
+            expectation.fulfill()
+            return
+        }
         
         let call = CAPPluginCall(callbackId: "test", options: [
             "assetPath": deletableURL.absoluteString,
@@ -504,7 +529,8 @@ class PluginTests: XCTestCase {
             "notificationMetadata": [
                 "title": "Test Song",
                 "artist": "Test Artist",
-                "album": "Test Album"
+                "album": "Test Album",
+                "artworkUrl": "https://example.com/artwork.jpg"
             ]
         ], success: { (_, _) in
             // Success case
@@ -530,6 +556,7 @@ class PluginTests: XCTestCase {
                         XCTAssertEqual(metadata["title"], "Test Song", "Title should be stored")
                         XCTAssertEqual(metadata["artist"], "Test Artist", "Artist should be stored")
                         XCTAssertEqual(metadata["album"], "Test Album", "Album should be stored")
+                        XCTAssertEqual(metadata["artworkUrl"], "https://example.com/artwork.jpg", "Artwork URL should be stored")
                     } else {
                         XCTFail("Notification metadata should be stored")
                     }
@@ -567,14 +594,13 @@ class PluginTests: XCTestCase {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.plugin.executeOnAudioQueue {
                     // Verify cleanup occurred even on failure
-                    // playOnceAssets should be empty after failure
-                    XCTAssertTrue(self.plugin.playOnceAssets.isEmpty, "playOnceAssets should be empty after failure")
-                    
-                    // If an asset was created but failed, verify it's cleaned up from both collections
+                    // Any asset created should be cleaned up from audioList
                     for assetId in initialAssetIds {
-                        XCTAssertNil(self.plugin.audioList[assetId], "Failed asset should be removed from audioList")
-                        XCTAssertFalse(self.plugin.playOnceAssets.contains(assetId), "Failed asset should be removed from playOnceAssets")
+                        XCTAssertNil(self.plugin.audioList[assetId], "Failed asset should be cleaned up from audioList")
                     }
+                    
+                    // And no dangling playOnce IDs should remain
+                    XCTAssertTrue(self.plugin.playOnceAssets.isEmpty, "playOnce assets should be cleaned up on error")
                     
                     expectation.fulfill()
                 }
@@ -595,17 +621,14 @@ class PluginTests: XCTestCase {
             "volume": 1.0,
             "isUrl": true,
             "autoPlay": false
-        ], success: { (_, _) in
-            // Success case
+        ], success: { (result, _) in
+            // Capture returned assetId from public API
+            firstAssetId = result?.data?["assetId"] as? String
         }, error: { (_) in
             XCTFail("PlayOnce shouldn't fail")
         })!
         
         plugin.playOnce(call1)
-        
-        plugin.executeOnAudioQueue {
-            firstAssetId = self.plugin.playOnceAssets.first
-        }
         
         // Create second playOnce
         let call2 = CAPPluginCall(callbackId: "test2", options: [
@@ -613,29 +636,36 @@ class PluginTests: XCTestCase {
             "volume": 1.0,
             "isUrl": true,
             "autoPlay": false
-        ], success: { (_, _) in
-            // Success case
+        ], success: { (result, _) in
+            // Capture returned assetId from public API
+            secondAssetId = result?.data?["assetId"] as? String
         }, error: { (_) in
             XCTFail("PlayOnce shouldn't fail")
         })!
         
         plugin.playOnce(call2)
         
-        plugin.executeOnAudioQueue {
-            XCTAssertEqual(self.plugin.playOnceAssets.count, 2, "Should have two playOnce assets")
-            
-            // Get second asset ID
-            secondAssetId = self.plugin.playOnceAssets.filter { $0 != firstAssetId }.first
-            
-            XCTAssertNotNil(firstAssetId, "First asset ID should exist")
-            XCTAssertNotNil(secondAssetId, "Second asset ID should exist")
-            XCTAssertNotEqual(firstAssetId, secondAssetId, "Asset IDs should be unique")
-            
-            // Verify both have "playOnce_" prefix
-            XCTAssertTrue(firstAssetId?.hasPrefix("playOnce_") ?? false, "Asset ID should have playOnce prefix")
-            XCTAssertTrue(secondAssetId?.hasPrefix("playOnce_") ?? false, "Asset ID should have playOnce prefix")
-            
-            expectation.fulfill()
+        // Wait for both to complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.plugin.executeOnAudioQueue {
+                // Verify we got two distinct asset IDs from the public API
+                XCTAssertNotNil(firstAssetId, "First asset ID should exist")
+                XCTAssertNotNil(secondAssetId, "Second asset ID should exist")
+                XCTAssertNotEqual(firstAssetId, secondAssetId, "Asset IDs should be unique")
+                
+                // Verify both have "playOnce_" prefix
+                XCTAssertTrue(firstAssetId?.hasPrefix("playOnce_") ?? false, "First asset ID should have playOnce prefix")
+                XCTAssertTrue(secondAssetId?.hasPrefix("playOnce_") ?? false, "Second asset ID should have playOnce prefix")
+                
+                // Cross-check that both are present in playOnceAssets as internal consistency check
+                if let id1 = firstAssetId, let id2 = secondAssetId {
+                    XCTAssertTrue(self.plugin.playOnceAssets.contains(id1), "First assetId should be tracked internally")
+                    XCTAssertTrue(self.plugin.playOnceAssets.contains(id2), "Second assetId should be tracked internally")
+                    XCTAssertEqual(self.plugin.playOnceAssets.count, 2, "Should have two playOnce assets tracked")
+                }
+                
+                expectation.fulfill()
+            }
         }
         
         wait(for: [expectation], timeout: 5.0)

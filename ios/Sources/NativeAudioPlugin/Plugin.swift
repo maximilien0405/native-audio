@@ -482,6 +482,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                 if assetPathSplit.count >= 2 {
                     basePath = Bundle.main.path(forResource: assetPathSplit[0], ofType: assetPathSplit[1])
                 } else {
+                    cleanupOnFailure(assetId: assetId)
                     call.reject("Invalid asset path format: \(assetPath)")
                     return
                 }

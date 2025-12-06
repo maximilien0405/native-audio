@@ -394,57 +394,130 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             }
         }
         
-        // Build preload options
-        var preloadOptions: [String: Any] = [
-            Constant.AssetIdKey: assetId,
-            Constant.AssetPathKey: assetPath,
-            Constant.VolumeKey: volume,
-            "isUrl": isLocalUrl
-        ]
-        
-        if let headers = call.getObject("headers") {
-            preloadOptions["headers"] = headers
-        }
-        
-        // Create a temporary call object for preload
-        let preloadCallData = JSObject(preloadOptions)
-        let preloadCall = CAPPluginCall(callbackId: call.callbackId, options: preloadCallData, success: { (result, pluginCall) in
-            // Preload succeeded, now set up completion and optionally play
-            self.audioQueue.sync {
-                guard let asset = self.audioList[assetId] as? AudioAsset else {
-                    call.reject("Failed to load asset for playOnce")
+        // Inline preload logic directly (avoid creating mock PluginCall)
+        audioQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            
+            // Check if asset already exists
+            if self.audioList[assetId] != nil {
+                call.reject(Constant.ErrorAssetAlreadyLoaded + " - " + assetId)
+                return
+            }
+            
+            var basePath: String?
+            
+            if let url = URL(string: assetPath), url.scheme != nil {
+                // Check if it's a local file URL or a remote URL
+                if url.isFileURL {
+                    // Handle local file URL
+                    basePath = url.path
+                    
+                    if let basePath = basePath, FileManager.default.fileExists(atPath: basePath) {
+                        let audioAsset = AudioAsset(
+                            owner: self,
+                            withAssetId: assetId,
+                            withPath: basePath,
+                            withChannels: 1,
+                            withVolume: volume,
+                            withFadeDelay: 0.5
+                        )
+                        self.audioList[assetId] = audioAsset
+                    } else {
+                        call.reject(Constant.ErrorAssetPath + " - " + assetPath)
+                        return
+                    }
+                } else {
+                    // Handle remote URL
+                    var headers: [String: String]?
+                    if let headersObj = call.getObject("headers") {
+                        headers = [:]
+                        for (key, value) in headersObj {
+                            if let stringValue = value as? String {
+                                headers?[key] = stringValue
+                            }
+                        }
+                    }
+                    let remoteAudioAsset = RemoteAudioAsset(
+                        owner: self,
+                        withAssetId: assetId,
+                        withPath: assetPath,
+                        withChannels: 1,
+                        withVolume: volume,
+                        withFadeDelay: 0.5,
+                        withHeaders: headers
+                    )
+                    self.audioList[assetId] = remoteAudioAsset
+                }
+            } else if !isLocalUrl {
+                // Handle public folder
+                let publicAssetPath = assetPath.starts(with: "public/") ? assetPath : "public/" + assetPath
+                let assetPathSplit = publicAssetPath.components(separatedBy: ".")
+                if assetPathSplit.count >= 2 {
+                    basePath = Bundle.main.path(forResource: assetPathSplit[0], ofType: assetPathSplit[1])
+                } else {
+                    call.reject("Invalid asset path format: \(assetPath)")
                     return
                 }
                 
-                asset.onComplete = { [weak self] in
-                    self?.notifyListeners("complete", data: ["assetId": assetId])
-                    cleanupHandler()
+                if let basePath = basePath, FileManager.default.fileExists(atPath: basePath) {
+                    let audioAsset = AudioAsset(
+                        owner: self,
+                        withAssetId: assetId,
+                        withPath: basePath,
+                        withChannels: 1,
+                        withVolume: volume,
+                        withFadeDelay: 0.5
+                    )
+                    self.audioList[assetId] = audioAsset
+                } else {
+                    call.reject(Constant.ErrorAssetPath + " - " + assetPath)
+                    return
                 }
+            } else {
+                // Handle local file path
+                let fileURL = URL(fileURLWithPath: assetPath)
+                basePath = fileURL.path
                 
-                // Auto-play if requested
-                if autoPlay {
-                    self.activateSession()
-                    asset.play(time: 0)
+                if let basePath = basePath, FileManager.default.fileExists(atPath: basePath) {
+                    let audioAsset = AudioAsset(
+                        owner: self,
+                        withAssetId: assetId,
+                        withPath: basePath,
+                        withChannels: 1,
+                        withVolume: volume,
+                        withFadeDelay: 0.5
+                    )
+                    self.audioList[assetId] = audioAsset
+                } else {
+                    call.reject(Constant.ErrorAssetPath + " - " + assetPath)
+                    return
                 }
-                
-                // Return the generated assetId
-                call.resolve(["assetId": assetId])
             }
-        }, error: { (error) in
-            // Cleanup on failure
-            self.audioQueue.async(flags: .barrier) {
+            
+            // Get the loaded asset
+            guard let asset = self.audioList[assetId] as? AudioAsset else {
+                // Cleanup on failure
                 self.playOnceAssets.remove(assetId)
                 self.notificationMetadataMap.removeValue(forKey: assetId)
-                if let failedAsset = self.audioList[assetId] as? AudioAsset {
-                    failedAsset.unload()
-                    self.audioList[assetId] = nil
-                }
+                call.reject("Failed to load asset for playOnce")
+                return
             }
-            call.reject("Failed to load asset for playOnce: \(error?.localizedDescription ?? "unknown error")")
-        })
-        
-        // Call preloadAsset with the temporary call
-        preloadAsset(preloadCall, isComplex: true)
+            
+            // Set up completion handler
+            asset.onComplete = { [weak self] in
+                self?.notifyListeners("complete", data: ["assetId": assetId])
+                cleanupHandler()
+            }
+            
+            // Auto-play if requested
+            if autoPlay {
+                self.activateSession()
+                asset.play(time: 0)
+            }
+            
+            // Return the generated assetId
+            call.resolve(["assetId": assetId])
+        }
     }
     
     private func deleteFileIfSafe(path: String) {

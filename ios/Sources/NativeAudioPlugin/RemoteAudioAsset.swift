@@ -93,6 +93,9 @@ public class RemoteAudioAsset: AudioAsset {
         notificationObservers = []
     }
 
+    /// Notifies listeners that this asset finished playing and invokes the optional completion callback if set.
+    /// 
+    /// The method signals completion for the asset (using the assetId) and then calls `onComplete` when present.
     func playerDidFinishPlaying(player: AVPlayer) {
         owner?.executeOnAudioQueue { [weak self] in
             guard let self = self else { return }
@@ -199,6 +202,9 @@ public class RemoteAudioAsset: AudioAsset {
         }
     }
 
+    /// Configures all player channels to loop and starts playback for the current channel.
+    ///
+    /// Cleans up any existing notification observers, sets each player's end action to none, subscribes to each player's end-of-item notification to seek back to start and replay, starts the player at `playIndex`, and begins periodic current-time updates. The work is scheduled on the owner's audio queue.
     override func loop() {
         owner?.executeOnAudioQueue { [weak self] in
             guard let self = self else { return }
@@ -235,6 +241,9 @@ public class RemoteAudioAsset: AudioAsset {
         }
     }
 
+    /// Removes all NotificationCenter observers tracked by this asset and clears the internal observer list.
+    /// 
+    /// This unregisters each observer previously added to `NotificationCenter.default` and resets `notificationObservers` to an empty array.
     internal func cleanupNotificationObservers() {
         for observer in notificationObservers {
             NotificationCenter.default.removeObserver(observer)

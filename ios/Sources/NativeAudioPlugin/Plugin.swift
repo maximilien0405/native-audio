@@ -65,6 +65,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     // Track playOnce assets for automatic cleanup
     internal var playOnceAssets: Set<String> = []
 
+    /// Initialize plugin state and audio-related handlers, and register background behavior for session management.
+    /// 
+    /// Sets the queue-specific key, initializes defaults (e.g., `fadeMusic = false`), and defers audio session activation until first use. Configures interruption handling and the remote command center, and registers a background observer that will end the audio session when the app enters background only if no plugin-managed audio is playing and no other system audio is active.
     @objc override public func load() {
         super.load()
         audioQueue.setSpecific(key: queueKey, value: true)
@@ -305,6 +308,11 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
+    /// Preloads an audio asset into the plugin's audio cache for full-featured playback.
+    /// 
+    /// The call should include the asset configuration (for example `assetId`, `assetPath`) and may include optional playback and metadata options such as `channels`, `volume`, `delay`, `isUrl`, `headers`, and notification metadata. The plugin will load the asset so it is ready for subsequent play, loop, stop and other playback operations.
+    /// - Parameters:
+    ///   - call: A `CAPPluginCall` containing the preload options (e.g. `assetId`, `assetPath`, optional `channels`, `volume`, `delay`, `isUrl`, `headers`, and notification metadata).
     @objc func preload(_ call: CAPPluginCall) {
         preloadAsset(call, isComplex: true)
     }
@@ -322,7 +330,17 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     ///   - `deleteAfterPlay`: Delete file after playback (default: false)
     ///   - `notificationMetadata`: Metadata for Now Playing info (optional)
     ///
-    /// - Returns: Resolves with `assetId` that can be used to control playback before completion
+    /// Plays a single-use audio asset identified by a generated temporary assetId; optionally auto-plays, shows Now Playing metadata, and deletes a local file after playback.
+    /// - Parameters:
+    ///   - call: Plugin call containing options:
+    ///     - "assetPath": String — required path or URL to the audio asset.
+    ///     - "autoPlay": Bool — play immediately when loaded (default `true`).
+    ///     - "deleteAfterPlay": Bool — delete the local file after playback (default `false`).
+    ///     - "volume": Float — initial volume, clamped to the plugin's allowed range.
+    ///     - "isUrl": Bool — treat `assetPath` as a plain local path when `true` (default `false`).
+    ///     - "headers": Object — optional HTTP headers for remote URLs (string values).
+    ///     - Notification metadata (object under `Constant.NotificationMetadata`): optional keys `title`, `artist`, `album`, `artworkUrl` used for Now Playing.
+    /// - Returns: A dictionary with `assetId`: the generated temporary asset identifier for the loaded one-shot asset.
     @objc func playOnce(_ call: CAPPluginCall) {
         // Generate unique temporary asset ID
         let assetId = "playOnce_\(Int(Date().timeIntervalSince1970 * 1000))_\(UUID().uuidString.prefix(8))"
@@ -413,7 +431,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         /// Removes the asset ID from both playOnceAssets set and notificationMetadataMap
         /// to ensure proper cleanup when an error occurs during playOnce execution.
         ///
-        /// - Parameter assetId: The asset ID to clean up
+        /// Removes transient tracking for a one-off playback asset and its associated notification metadata.
+        /// - Parameter assetId: The identifier of the play-once asset to remove from internal tracking and metadata maps.
         func cleanupOnFailure(assetId: String) {
             self.playOnceAssets.remove(assetId)
             self.notificationMetadataMap.removeValue(forKey: assetId)
@@ -555,6 +574,14 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
     
+    /// Deletes a local file at the given path only if it is safely resolvable and located inside the app sandbox.
+    /// 
+    /// The function resolves symlinks and accepts either file URLs (starting with `file://`) or filesystem paths. It will
+    /// only remove the item when the resolved path is inside the app's temporary, caches, or documents directories and the
+    /// path refers to a file (not a directory). If the file does not exist or the path is outside the allowed directories,
+    /// the function does nothing and logs a message. Errors encountered during removal are logged.
+    ///
+    /// - Parameter path: A filesystem path or `file://` URL string pointing to the candidate file to delete.
     private func deleteFileIfSafe(path: String) {
         let fileManager = FileManager.default
         
@@ -603,6 +630,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
+    /// Activates the app's audio session when no other audio is playing.
+    /// Attempts to set the shared AVAudioSession active; if activation fails the error is printed to the console and not propagated.
     func activateSession() {
         do {
             // Only activate if not already active

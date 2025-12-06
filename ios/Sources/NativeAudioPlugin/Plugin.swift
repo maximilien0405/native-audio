@@ -511,7 +511,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             // Auto-play if requested
             if autoPlay {
                 self.activateSession()
-                asset.play(time: 0)
+                asset.play(time: 0, delay: 0)
 
                 // Update notification center if enabled
                 if self.showNotification {

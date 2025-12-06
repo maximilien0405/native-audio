@@ -38,6 +38,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         CAPPluginMethod(name: "deinitPlugin", returnType: CAPPluginReturnPromise)
     ]
     internal let audioQueue = DispatchQueue(label: "ee.forgr.audio.queue", qos: .userInitiated, attributes: .concurrent)
+    /// A dictionary that stores audio asset objects by their asset IDs.
+    ///
+    /// - Important: Must only be accessed within `audioQueue.sync` blocks.
     internal var audioList: [String: Any] = [:] {
         didSet {
             // Ensure audioList modifications happen on audioQueue
@@ -59,10 +62,15 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     // Notification center support
     private var showNotification = false
+    /// A mapping from asset IDs to their associated notification metadata for media playback.
+    ///
+    /// - Important: Must only be accessed within `audioQueue.sync` blocks.
     internal var notificationMetadataMap: [String: [String: String]] = [:]
     private var currentlyPlayingAssetId: String?
 
-    // Track playOnce assets for automatic cleanup
+    /// Stores the asset IDs for playOnce operations to enable automatic cleanup after playback.
+    ///
+    /// - Important: Must only be accessed within `audioQueue.sync` blocks.
     internal var playOnceAssets: Set<String> = []
 
     /// Initialize plugin state and audio-related handlers, and register background behavior for session management.
@@ -574,15 +582,16 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
     
-    /// Deletes a local file at the given path only if it is safely resolvable and located inside the app sandbox.
-    /// 
-    /// The function resolves symlinks and accepts either file URLs (starting with `file://`) or filesystem paths. It will
-    /// only remove the item when the resolved path is inside the app's temporary, caches, or documents directories and the
-    /// path refers to a file (not a directory). If the file does not exist or the path is outside the allowed directories,
-    /// the function does nothing and logs a message. Errors encountered during removal are logged.
+    /// Validates whether a file path is safe for deletion.
     ///
-    /// - Parameter path: A filesystem path or `file://` URL string pointing to the candidate file to delete.
-    private func deleteFileIfSafe(path: String) {
+    /// Checks that the resolved path (after symlink resolution) is:
+    /// 1. Non-empty and resolvable
+    /// 2. Located within app sandbox directories (temp, caches, or documents)
+    /// 3. Not a directory
+    ///
+    /// - Parameter path: A filesystem path or `file://` URL string to validate.
+    /// - Returns: The canonical resolved path if safe to delete, otherwise `nil`.
+    private func isDeletableFile(path: String) -> String? {
         let fileManager = FileManager.default
         
         // Resolve symlinks and get absolute path
@@ -595,11 +604,10 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         
         guard !resolvedPath.isEmpty else {
             print("Skipping file deletion: cannot resolve path (\(path))")
-            return
+            return nil
         }
         
         // Only allow deletion in app's sandbox directories
-        // Validate the file is within safe directories (use resolvedPath which already handles symlinks)
         let allowedPrefixes = [
             NSTemporaryDirectory(),
             FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.path ?? "",
@@ -608,18 +616,38 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         
         guard allowedPrefixes.contains(where: { resolvedPath.hasPrefix($0) }) else {
             print("Skipping file deletion: path outside allowed directories (\(resolvedPath))")
+            return nil
+        }
+        
+        // Prevent deletion of directories
+        var isDirectory: ObjCBool = false
+        if fileManager.fileExists(atPath: resolvedPath, isDirectory: &isDirectory) {
+            if isDirectory.boolValue {
+                print("Skipping file deletion: path is a directory (\(resolvedPath))")
+                return nil
+            }
+        }
+        
+        return resolvedPath
+    }
+    
+    /// Deletes a local file at the given path only if it is safely resolvable and located inside the app sandbox.
+    /// 
+    /// The function resolves symlinks and accepts either file URLs (starting with `file://`) or filesystem paths. It will
+    /// only remove the item when the resolved path is inside the app's temporary, caches, or documents directories and the
+    /// path refers to a file (not a directory). If the file does not exist or the path is outside the allowed directories,
+    /// the function does nothing and logs a message. Errors encountered during removal are logged.
+    ///
+    /// - Parameter path: A filesystem path or `file://` URL string pointing to the candidate file to delete.
+    private func deleteFileIfSafe(path: String) {
+        guard let resolvedPath = isDeletableFile(path: path) else {
             return
         }
         
+        let fileManager = FileManager.default
+        
         do {
-            // Additional check: prevent deletion of directories
-            var isDirectory: ObjCBool = false
-            if fileManager.fileExists(atPath: resolvedPath, isDirectory: &isDirectory) {
-                if isDirectory.boolValue {
-                    print("Skipping file deletion: path is a directory (\(resolvedPath))")
-                    return
-                }
-                
+            if fileManager.fileExists(atPath: resolvedPath) {
                 try fileManager.removeItem(atPath: resolvedPath)
                 print("Deleted file after playOnce: \(resolvedPath)")
             } else {
@@ -838,6 +866,12 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                     self.currentlyPlayingAssetId = nil
                 }
 
+                // Clean up playOnce tracking if this was a playOnce asset
+                if self.playOnceAssets.contains(audioId) {
+                    self.playOnceAssets.remove(audioId)
+                    self.notificationMetadataMap.removeValue(forKey: audioId)
+                }
+
                 self.endSession()
                 call.resolve()
             } catch {
@@ -870,11 +904,25 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             if let asset = self.audioList[audioId] as? AudioAsset {
                 asset.unload()
                 self.audioList[audioId] = nil
+                
+                // Clean up playOnce tracking if this was a playOnce asset
+                if self.playOnceAssets.contains(audioId) {
+                    self.playOnceAssets.remove(audioId)
+                    self.notificationMetadataMap.removeValue(forKey: audioId)
+                }
+                
                 call.resolve()
             } else if let audioNumber = self.audioList[audioId] as? NSNumber {
                 // Also handle unloading system sounds
                 AudioServicesDisposeSystemSoundID(SystemSoundID(audioNumber.intValue))
                 self.audioList[audioId] = nil
+                
+                // Clean up playOnce tracking if this was a playOnce asset
+                if self.playOnceAssets.contains(audioId) {
+                    self.playOnceAssets.remove(audioId)
+                    self.notificationMetadataMap.removeValue(forKey: audioId)
+                }
+                
                 call.resolve()
             } else {
                 call.reject("Cannot cast to AudioAsset")

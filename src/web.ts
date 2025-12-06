@@ -7,8 +7,7 @@ import { NativeAudio } from './definitions';
 export class NativeAudioWeb extends WebPlugin implements NativeAudio {
   private static readonly FILE_LOCATION: string = '';
   private static readonly AUDIO_ASSET_BY_ASSET_ID: Map<string, AudioAsset> = new Map<string, AudioAsset>();
-  private readonly playOnceAssets: Set<string> = new Set<string>();
-
+  private static readonly playOnceAssets: Set<string> = new Set<string>();
   constructor() {
     super();
   }
@@ -89,7 +88,7 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
   }): Promise<{ assetId: string }> {
     // Generate a unique temporary asset ID
     const assetId = `playOnce_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    this.playOnceAssets.add(assetId);
+    NativeAudioWeb.playOnceAssets.add(assetId);
 
     const autoPlay = options.autoPlay !== false; // Default to true
     const deleteAfterPlay = options.deleteAfterPlay ?? false;
@@ -109,7 +108,7 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
         try {
           // Unload the asset
           await this.unload({ assetId });
-          this.playOnceAssets.delete(assetId);
+          NativeAudioWeb.playOnceAssets.delete(assetId);
 
           // Delete file if requested (Web can't actually delete files from disk)
           // This is a no-op on web, but we keep the interface consistent
@@ -144,7 +143,7 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
       // Cleanup on failure
       try {
         await this.unload({ assetId });
-        this.playOnceAssets.delete(assetId);
+        NativeAudioWeb.playOnceAssets.delete(assetId);
       } catch {
         // Ignore cleanup errors
       }

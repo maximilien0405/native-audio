@@ -335,8 +335,24 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                                     }
 
                                     if (assetPath.endsWith(".m3u8")) {
-                                        StreamAudioAsset streamAudioAsset = new StreamAudioAsset(plugin, assetId, uri, volume, requestHeaders);
-                                        plugin.audioAssetList.put(assetId, streamAudioAsset);
+                                        // HLS Stream - check if HLS support is available
+                                        if (HlsAvailabilityChecker.isHlsAvailable()) {
+                                            StreamAudioAsset streamAudioAsset = new StreamAudioAsset(plugin, assetId, uri, volume, requestHeaders);
+                                            plugin.audioAssetList.put(assetId, streamAudioAsset);
+                                        } else {
+                                            // Fall back to RemoteAudioAsset when HLS is not available
+                                            Log.w(TAG, "HLS not available for .m3u8, falling back to RemoteAudioAsset");
+                                            RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(
+                                                plugin,
+                                                assetId,
+                                                uri,
+                                                audioChannelNum,
+                                                volume,
+                                                requestHeaders
+                                            );
+                                            remoteAudioAsset.setCompletionListener(plugin::dispatchComplete);
+                                            plugin.audioAssetList.put(assetId, remoteAudioAsset);
+                                        }
                                     } else {
                                         RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(
                                             plugin,
@@ -359,6 +375,26 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                                     AudioAsset asset = new AudioAsset(plugin, assetId, afd, audioChannelNum, volume);
                                     asset.setCompletionListener(plugin::dispatchComplete);
                                     plugin.audioAssetList.put(assetId, asset);
+                                } else {
+                                    // Handle unexpected URI schemes by attempting to treat as local file
+                                    try {
+                                        File file = new File(uri.getPath());
+                                        if (!file.exists()) {
+                                            throw new Exception(ERROR_ASSET_PATH_MISSING + " - " + assetPath);
+                                        }
+                                        ParcelFileDescriptor pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+                                        AssetFileDescriptor afd = new AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH);
+                                        AudioAsset asset = new AudioAsset(plugin, assetId, afd, audioChannelNum, volume);
+                                        asset.setCompletionListener(plugin::dispatchComplete);
+                                        plugin.audioAssetList.put(assetId, asset);
+                                        Log.w(TAG, "Unexpected URI scheme '" + uri.getScheme() + "' treated as local file: " + assetPath);
+                                    } catch (Exception e) {
+                                        throw new Exception(
+                                            "Failed to load asset with unexpected URI scheme '" + uri.getScheme() + 
+                                            "' (expected 'http', 'https', or 'file'). Asset path: " + assetPath + 
+                                            ". Error: " + e.getMessage()
+                                        );
+                                    }
                                 }
                             } else {
                                 // Handle asset in public folder
@@ -419,24 +455,79 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                                                             plugin.currentlyPlayingAssetId = null;
                                                         }
 
-                                                        // Delete file if requested
+                                                        // Delete file if requested (with safety checks)
+                                                        // if (filePathToDelete != null) {
+                                                        //     try {
+                                                        //         File fileToDelete;
+                                                        //         try {
+                                                        //             // Try to parse as URI first
+                                                        //             fileToDelete = new File(URI.create(filePathToDelete));
+                                                        //         } catch (IllegalArgumentException e) {
+                                                        //             // If URI parsing fails, treat as raw file path
+                                                        //             Log.d(TAG, "Invalid URI format, using raw path: " + filePathToDelete, e);
+                                                        //             fileToDelete = new File(filePathToDelete);
+                                                        //         }
+                                                                
+                                                        //         // Validate the file is within safe directories
+                                                        //         String canonicalPath = fileToDelete.getCanonicalPath();
+                                                        //         String cacheDir = plugin.getContext().getCacheDir().getCanonicalPath();
+                                                        //         String filesDir = plugin.getContext().getFilesDir().getCanonicalPath();
+                                                        //         String externalCacheDir = plugin.getContext().getExternalCacheDir() != null ? 
+                                                        //             plugin.getContext().getExternalCacheDir().getCanonicalPath() : null;
+                                                        //         String externalFilesDir = plugin.getContext().getExternalFilesDir(null) != null ?
+                                                        //             plugin.getContext().getExternalFilesDir(null).getCanonicalPath() : null;
+                                                                
+                                                        //         // Check if file is in a safe directory
+                                                        //         boolean isSafe = canonicalPath.startsWith(cacheDir) || 
+                                                        //                         canonicalPath.startsWith(filesDir) ||
+                                                        //                         (externalCacheDir != null && canonicalPath.startsWith(externalCacheDir)) ||
+                                                        //                         (externalFilesDir != null && canonicalPath.startsWith(externalFilesDir));
+                                                                
+                                                        //         if (!isSafe) {
+                                                        //             Log.w(TAG, "Skipping file deletion: path outside safe directories - " + canonicalPath);
+                                                        //             return;
+                                                        //         }
+                                                                
+                                                        //         // Additional check: prevent deletion of directories
+                                                        //         if (fileToDelete.isDirectory()) {
+                                                        //             Log.w(TAG, "Skipping file deletion: path is a directory - " + canonicalPath);
+                                                        //             return;
+                                                        //         }
+                                                                
+                                                        //         if (fileToDelete.exists() && fileToDelete.delete()) {
+                                                        //             Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
+                                                        //         } else {
+                                                        //             Log.w(TAG, "File does not exist or deletion failed: " + filePathToDelete);
+                                                        //         }
+                                                        //     } catch (Exception e) {
+                                                        //         Log.e(TAG, "Error deleting file after playOnce: " + filePathToDelete, e);
+                                                        //     }
+                                                        // }
                                                         if (filePathToDelete != null) {
                                                             try {
-                                                                File fileToDelete;
-                                                                try {
-                                                                    // Try to parse as URI first
-                                                                    fileToDelete = new File(URI.create(filePathToDelete));
-                                                                } catch (IllegalArgumentException e) {
-                                                                    // If URI parsing fails, treat as raw file path
-                                                                    Log.d(TAG, "Invalid URI format, using raw path: " + filePathToDelete, e);
-                                                                    fileToDelete = new File(filePathToDelete);
+                                                                File fileToDelete = new File(new URI(filePathToDelete));
+                                                                
+                                                                // Validate the file is within safe directories
+                                                                String canonicalPath = fileToDelete.getCanonicalPath();
+                                                                String cacheDir = getContext().getCacheDir().getCanonicalPath();
+                                                                String filesDir = getContext().getFilesDir().getCanonicalPath();
+                                                                String externalCacheDir = getContext().getExternalCacheDir() != null ? 
+                                                                    getContext().getExternalCacheDir().getCanonicalPath() : null;
+                                                                
+                                                                boolean isSafe = canonicalPath.startsWith(cacheDir) || 
+                                                                                canonicalPath.startsWith(filesDir) ||
+                                                                                (externalCacheDir != null && canonicalPath.startsWith(externalCacheDir));
+                                                                
+                                                                if (!isSafe) {
+                                                                    Log.w(TAG, "Skipping file deletion: path outside safe directories");
+                                                                    return;
                                                                 }
                                                                 
                                                                 if (fileToDelete.exists() && fileToDelete.delete()) {
                                                                     Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
                                                                 }
                                                             } catch (Exception e) {
-                                                                Log.e(TAG, "Error deleting file after playOnce: " + filePathToDelete, e);
+                                                                Log.e(TAG, "Error deleting file after playOnce: " + e.getMessage());
                                                             }
                                                         }
                                                     } catch (Exception e) {
@@ -452,6 +543,12 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                             // Auto-play if requested
                             if (autoPlay) {
                                 asset.play(0.0);
+
+                                 // Update notification if enabled
+                                if (showNotification) {
+                                    currentlyPlayingAssetId = assetId;
+                                    updateNotification(assetId);
+                                }
                             }
 
                             // Return the generated assetId

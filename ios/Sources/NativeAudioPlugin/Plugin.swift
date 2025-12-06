@@ -513,6 +513,13 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             if autoPlay {
                 self.activateSession()
                 asset.play(time: 0)
+
+                // Update notification center if enabled
+                if self.showNotification {
+                        self.currentlyPlayingAssetId = assetId
+                        self.updateNowPlayingInfo(audioId: assetId, audioAsset: asset)
+                      self.updatePlaybackState(isPlaying: true)
+                    }
             }
             
             // Return the generated assetId
@@ -548,10 +555,31 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             return
         }
         
+        // Validate the file is within safe directories (use resolvedPath which already handles symlinks)
+        let allowedPrefixes = [
+            NSTemporaryDirectory(),
+            FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.path ?? "",
+            FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.path ?? ""
+        ]
+        
+        guard allowedPrefixes.contains(where: { resolvedPath.hasPrefix($0) }) else {
+            print("Skipping file deletion: path outside allowed directories (\(resolvedPath))")
+            return
+        }
+        
         do {
-            if fileManager.fileExists(atPath: resolvedPath) {
+            // Additional check: prevent deletion of directories
+            var isDirectory: ObjCBool = false
+            if fileManager.fileExists(atPath: resolvedPath, isDirectory: &isDirectory) {
+                if isDirectory.boolValue {
+                    print("Skipping file deletion: path is a directory (\(resolvedPath))")
+                    return
+                }
+                
                 try fileManager.removeItem(atPath: resolvedPath)
                 print("Deleted file after playOnce: \(resolvedPath)")
+            } else {
+                print("File does not exist: \(resolvedPath)")
             }
         } catch {
             print("Error deleting file after playOnce: \(error.localizedDescription)")

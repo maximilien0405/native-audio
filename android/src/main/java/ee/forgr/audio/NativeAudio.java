@@ -261,6 +261,31 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         );
     }
 
+    /**
+     * Plays an audio file once with automatic cleanup after completion.
+     *
+     * <p>This is a convenience method that combines preload, play, and unload into a single call.
+     * The audio asset is automatically cleaned up after playback completes or if an error occurs.
+     *
+     * <p>Supported features:
+     * <ul>
+     *   <li>Local files (file:// URLs) and remote URLs (http/https)</li>
+     *   <li>HLS streaming (.m3u8 files) on supported devices</li>
+     *   <li>Custom HTTP headers for remote files</li>
+     *   <li>Optional file deletion after playback (local files only)</li>
+     *   <li>Automatic resource cleanup on completion or error</li>
+     * </ul>
+     *
+     * @param call The Capacitor plugin call containing:
+     *   <ul>
+     *     <li>assetPath (required): Path to the audio file</li>
+     *     <li>volume (optional): Playback volume 0.1-1.0, default 1.0</li>
+     *     <li>isUrl (optional): Whether assetPath is a URL, default false</li>
+     *     <li>autoPlay (optional): Start playback immediately, default true</li>
+     *     <li>deleteAfterPlay (optional): Delete file after playback, default false</li>
+     *     <li>headers (optional): Custom HTTP headers for remote files</li>
+     *   </ul>
+     */
     @PluginMethod
     public void playOnce(final PluginCall call) {
         // Capture plugin reference for use in inner classes
@@ -820,9 +845,27 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     }
 
     /**
-     * Helper method to load an audio asset (local or remote) without resolving/rejecting a PluginCall.
-     * Returns the created AudioAsset or null on failure.
-     * Throws Exception with descriptive error message on failure.
+     * Helper method to load an audio asset from various sources.
+     *
+     * <p>This method handles the common logic for loading audio assets from:
+     * <ul>
+     *   <li>Remote URLs (http/https) - creates RemoteAudioAsset</li>
+     *   <li>HLS streams (.m3u8) - creates StreamAudioAsset via reflection if available</li>
+     *   <li>Local files (file:// URLs) - creates standard AudioAsset</li>
+     *   <li>Public folder assets - creates standard AudioAsset with "public/" prefix</li>
+     * </ul>
+     *
+     * <p>This method is used by both {@link #playOnce(PluginCall)} and {@link #preloadAsset(PluginCall)}
+     * to eliminate code duplication.
+     *
+     * @param assetId The unique identifier for this audio asset
+     * @param assetPath Path to the audio file or URL
+     * @param isLocalUrl Whether the assetPath is a URL (true) or local file path (false)
+     * @param volume Playback volume (0.1 to 1.0)
+     * @param audioChannelNum Number of audio channels
+     * @param headersObj Custom HTTP headers for remote files (can be null)
+     * @return The created AudioAsset instance
+     * @throws Exception If asset loading fails, with descriptive error message
      */
     private AudioAsset loadAudioAsset(
         String assetId,

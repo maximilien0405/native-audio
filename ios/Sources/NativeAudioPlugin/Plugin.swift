@@ -309,6 +309,20 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         preloadAsset(call, isComplex: true)
     }
 
+    /// Plays an audio file once with automatic cleanup after completion.
+    ///
+    /// This is a convenience method that combines preload, play, and unload into a single call.
+    /// The audio asset is automatically cleaned up after playback completes or if an error occurs.
+    ///
+    /// - Parameter call: The Capacitor plugin call containing:
+    ///   - `assetPath`: Path to the audio file (required)
+    ///   - `volume`: Playback volume 0.1-1.0 (default: 1.0)
+    ///   - `isUrl`: Whether assetPath is a URL (default: false)
+    ///   - `autoPlay`: Start playback immediately (default: true)
+    ///   - `deleteAfterPlay`: Delete file after playback (default: false)
+    ///   - `notificationMetadata`: Metadata for Now Playing info (optional)
+    ///
+    /// - Returns: Resolves with `assetId` that can be used to control playback before completion
     @objc func playOnce(_ call: CAPPluginCall) {
         // Generate unique temporary asset ID
         let assetId = "playOnce_\(Int(Date().timeIntervalSince1970 * 1000))_\(UUID().uuidString.prefix(8))"
@@ -394,7 +408,12 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             }
         }
         
-        // Helper to clean up on failure
+        /// Cleans up tracking data when playOnce fails to prevent memory leaks.
+        ///
+        /// Removes the asset ID from both playOnceAssets set and notificationMetadataMap
+        /// to ensure proper cleanup when an error occurs during playOnce execution.
+        ///
+        /// - Parameter assetId: The asset ID to clean up
         func cleanupOnFailure(assetId: String) {
             self.playOnceAssets.remove(assetId)
             self.notificationMetadataMap.removeValue(forKey: assetId)

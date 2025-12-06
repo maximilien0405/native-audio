@@ -356,8 +356,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                                 throw new Exception("Failed to load asset");
                             }
 
-                            // Set completion listener and add to asset list
-                            asset.setCompletionListener(plugin::dispatchComplete);
+                            // Add to asset list; completion listener is set below with cleanup
                             plugin.audioAssetList.put(assetId, asset);
 
                             // Store the file path if we need to delete it later

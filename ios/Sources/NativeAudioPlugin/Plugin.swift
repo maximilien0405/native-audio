@@ -1012,7 +1012,10 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                 metadataDict["artworkUrl"] = artworkUrl
             }
             if !metadataDict.isEmpty {
-                notificationMetadataMap[audioId] = metadataDict
+                // Store metadata on audioQueue for thread safety
+                audioQueue.sync(flags: .barrier) {
+                    notificationMetadataMap[audioId] = metadataDict
+                }
             }
         }
 
@@ -1221,8 +1224,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
             var nowPlayingInfo = [String: Any]()
 
-            // Get metadata from the map
-            if let metadata = self.notificationMetadataMap[audioId] {
+            // Get metadata from the map (read on audioQueue for thread safety)
+            let metadata = self.audioQueue.sync { self.notificationMetadataMap[audioId] }
+            if let metadata = metadata {
                 if let title = metadata["title"] {
                     nowPlayingInfo[MPMediaItemPropertyTitle] = title
                 }

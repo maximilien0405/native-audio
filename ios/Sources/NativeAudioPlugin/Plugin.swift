@@ -543,17 +543,6 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
         
         // Only allow deletion in app's sandbox directories
-        let allowedPrefixes = [
-            NSTemporaryDirectory(),
-            FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.path ?? "",
-            FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.path ?? ""
-        ]
-        
-        guard allowedPrefixes.contains(where: { resolvedPath.hasPrefix($0) }) else {
-            print("Skipping file deletion: path outside allowed directories (\(resolvedPath))")
-            return
-        }
-        
         // Validate the file is within safe directories (use resolvedPath which already handles symlinks)
         let allowedPrefixes = [
             NSTemporaryDirectory(),

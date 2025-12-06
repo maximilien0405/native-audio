@@ -75,7 +75,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     /// Initialize plugin state and audio-related handlers, and register background behavior for session management.
     /// 
-    /// Sets the queue-specific key, initializes defaults (e.g., `fadeMusic = false`), and defers audio session activation until first use. Configures interruption handling and the remote command center, and registers a background observer that will end the audio session when the app enters background only if no plugin-managed audio is playing and no other system audio is active.
+    /// Performs initial plugin setup after the plugin is loaded.
+    /// 
+    /// Registers the plugin's audio queue, initializes default flags, defers full audio session activation until first use, and configures interruption handling and remote command controls. Also adds a background observer that will deactivate the audio session when the app enters background if no plugin-managed audio is playing and the system reports no other active audio.
     @objc override public func load() {
         super.load()
         audioQueue.setSpecific(key: queueKey, value: true)
@@ -303,6 +305,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         call.resolve()
     }
 
+    /// Checks whether an audio asset with the given assetId is currently loaded.
+    /// - Parameter call: A CAPPluginCall that must include the `"assetId"` string identifying the audio asset to check. The call is rejected with `"Missing assetId"` if the parameter is absent.
+    /// - Returns: A dictionary with key `found` set to `true` if the asset is loaded, `false` otherwise.
     @objc func isPreloaded(_ call: CAPPluginCall) {
         guard let assetId = call.getString(Constant.AssetIdKey) else {
             call.reject("Missing assetId")
@@ -320,7 +325,10 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     /// 
     /// The call should include the asset configuration (for example `assetId`, `assetPath`) and may include optional playback and metadata options such as `channels`, `volume`, `delay`, `isUrl`, `headers`, and notification metadata. The plugin will load the asset so it is ready for subsequent play, loop, stop and other playback operations.
     /// - Parameters:
-    ///   - call: A `CAPPluginCall` containing the preload options (e.g. `assetId`, `assetPath`, optional `channels`, `volume`, `delay`, `isUrl`, `headers`, and notification metadata).
+    /// Preloads an audio asset with advanced playback options for later use.
+    /// 
+    /// Prepares the asset specified in the plugin call (local file, bundled resource, or remote URL) using options such as `assetId`, `assetPath`, `isUrl`, `volume`, `channels`, `delay`, headers, and notification metadata so it is ready for playback.
+    /// - Parameter call: The CAPPluginCall containing preload options and identifiers.
     @objc func preload(_ call: CAPPluginCall) {
         preloadAsset(call, isComplex: true)
     }
@@ -348,7 +356,20 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     ///     - "isUrl": Bool — treat `assetPath` as a plain local path when `true` (default `false`).
     ///     - "headers": Object — optional HTTP headers for remote URLs (string values).
     ///     - Notification metadata (object under `Constant.NotificationMetadata`): optional keys `title`, `artist`, `album`, `artworkUrl` used for Now Playing.
-    /// - Returns: A dictionary with `assetId`: the generated temporary asset identifier for the loaded one-shot asset.
+    /// Preloads and optionally plays a one-shot audio asset, then removes it from internal storage after completion.
+    /// 
+    /// The method generates a unique temporary asset identifier, loads the asset from a local file, a public bundle resource, or a remote URL (with optional headers), and tracks it as a transient "play-once" asset. If `autoPlay` is true the asset will begin playback immediately and the plugin's audio session will be activated. When playback completes (or when the asset is unloaded), the asset and any associated Now Playing metadata are removed. If `deleteAfterPlay` is true and the source was a local file URL, the file is deleted from disk if it passes safe-sandbox checks.
+    /// 
+    /// Expected keys on the provided CAPPluginCall:
+    /// - `assetPath` (String): Path or URL of the audio resource (required).
+    /// - `autoPlay` (Bool): Whether to start playback immediately; defaults to `true`.
+    /// - `deleteAfterPlay` (Bool): Whether to delete a local file after playback; defaults to `false`.
+    /// - `volume` (Float): Initial volume, clamped to allowed range.
+    /// - `isUrl` (Bool): When true, treat `assetPath` as a plain file path even if it looks like a URL.
+    /// - `headers` (Object): Optional HTTP headers to use for remote URLs.
+    /// - `notificationMetadata` (Object): Optional Now Playing metadata with `title`, `artist`, `album`, and `artworkUrl`.
+    /// 
+    /// The call is resolved with `["assetId": "<generated id>"]` on success or rejected with an error message on failure.
     @objc func playOnce(_ call: CAPPluginCall) {
         // Generate unique temporary asset ID
         let assetId = "playOnce_\(Int(Date().timeIntervalSince1970 * 1000))_\(UUID().uuidString.prefix(8))"
@@ -440,7 +461,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         /// to ensure proper cleanup when an error occurs during playOnce execution.
         ///
         /// Removes transient tracking for a one-off playback asset and its associated notification metadata.
-        /// - Parameter assetId: The identifier of the play-once asset to remove from internal tracking and metadata maps.
+        /// Remove tracking and Now Playing metadata for a play-once asset after a failed load or playback.
+        /// - Parameter assetId: The asset identifier to remove from play-once tracking and notification metadata.
         func cleanupOnFailure(assetId: String) {
             self.playOnceAssets.remove(assetId)
             self.notificationMetadataMap.removeValue(forKey: assetId)
@@ -590,7 +612,11 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     /// 3. Not a directory
     ///
     /// - Parameter path: A filesystem path or `file://` URL string to validate.
-    /// - Returns: The canonical resolved path if safe to delete, otherwise `nil`.
+    /// Validates that a filesystem path can be safely deleted from the app sandbox and returns its resolved absolute path.
+    ///
+    /// Resolves symlinks and converts `file://` URLs or file paths to a canonical absolute path, then verifies the path is located inside the app's temporary, caches, or documents directories and is not a directory. If any check fails, returns `nil`.
+    /// - Parameter path: A file system path string or a `file://` URL string.
+    /// - Returns: The resolved absolute filesystem path if it is safe to delete, or `nil` otherwise.
     private func isDeletableFile(path: String) -> String? {
         let fileManager = FileManager.default
         
@@ -638,7 +664,10 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     /// path refers to a file (not a directory). If the file does not exist or the path is outside the allowed directories,
     /// the function does nothing and logs a message. Errors encountered during removal are logged.
     ///
-    /// - Parameter path: A filesystem path or `file://` URL string pointing to the candidate file to delete.
+    /// Deletes a file at the given path if it passes the plugin's safety checks.
+    /// 
+    /// The path is first validated with `isDeletableFile(path:)` (which resolves symlinks, ensures the file is inside the app's temporary, caches, or documents directories, and verifies it is not a directory). If validation succeeds and the file exists, the file is removed. Outcomes and errors are logged but not thrown.
+    /// - Parameter path: The candidate file system path to delete.
     private func deleteFileIfSafe(path: String) {
         guard let resolvedPath = isDeletableFile(path: path) else {
             return
@@ -659,7 +688,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     }
 
     /// Activates the app's audio session when no other audio is playing.
-    /// Attempts to set the shared AVAudioSession active; if activation fails the error is printed to the console and not propagated.
+    /// Activate the shared AVAudioSession when no other audio is playing.
+    /// 
+    /// If the system reports other audio is playing, the session is left inactive. On failure to activate, the error is printed to the console.
     func activateSession() {
         do {
             // Only activate if not already active
@@ -848,6 +879,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
+    /// Stops playback of the audio asset identified by `assetId` from the plugin call and performs related cleanup.
+    /// 
+    /// The `assetId` is read from the call using `Constant.AssetIdKey`. If the asset is currently playing it will be stopped; if `showNotification` is enabled the Now Playing info is cleared and `currentlyPlayingAssetId` is reset. If the asset was created by `playOnce`, it is removed from `playOnceAssets` and its notification metadata is removed. The audio session is ended if appropriate. The call is resolved on success or rejected with an error message on failure.
     @objc func stop(_ call: CAPPluginCall) {
         let audioId = call.getString(Constant.AssetIdKey) ?? ""
 
@@ -892,6 +926,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
+    /// Unloads a previously loaded audio asset identified by `assetId` and removes any associated one-shot tracking or metadata.
+    /// - Parameters:
+    ///   - call: The plugin call that must include the `assetId` string under the key used by the plugin; on success the call is resolved, on failure the call is rejected (for example if the audio list is empty or the asset cannot be cast/unloaded).
     @objc func unload(_ call: CAPPluginCall) {
         let audioId = call.getString(Constant.AssetIdKey) ?? ""
 
@@ -976,7 +1013,23 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
-    // swiftlint:disable cyclomatic_complexity function_body_length
+    /// Preloads an audio asset into the plugin's internal registry for later playback.
+    /// 
+    /// Accepts a CAPPluginCall containing asset information, validates inputs, stores optional now‑playing metadata, and creates either a lightweight system sound (for non-complex assets) or a full AudioAsset/RemoteAudioAsset (for complex assets). Supports local file paths, file URLs, public bundle resources, and remote URLs (with optional headers).
+    /// - Parameters:
+    ///   - call: CAPPluginCall containing required keys:
+    ///     - "assetId" (String): unique identifier for the asset.
+    ///     - "assetPath" (String): local path, file URL, public bundle resource, or remote URL.
+    ///     - "isUrl" (Bool, optional): treat the provided path as a raw URL when false/omitted for non-complex loads; ignored for complex loads.
+    ///     - For complex loads:
+    ///       - "volume" (Float, optional): initial volume (clamped to valid range).
+    ///       - "channels" (Int, optional): number of audio channels.
+    ///       - "delay" (Float, optional): fade delay.
+    ///     - For remote URLs:
+    ///       - "headers" (Object, optional): HTTP headers to use when loading the remote asset.
+    ///     - "notificationMetadata" (Object, optional): now‑playing metadata with keys "title", "artist", "album", and "artworkUrl".
+    ///   - isComplex: If true, creates a full-featured AudioAsset/RemoteAudioAsset; if false, creates a lightweight system sound identifier.
+    /// - Behavior: Resolves the provided call on successful preload; rejects the call with an error message if validation fails or the asset cannot be created.
     @objc private func preloadAsset(_ call: CAPPluginCall, isComplex complex: Bool) {
         // Common default values to ensure consistency
         let audioId = call.getString(Constant.AssetIdKey) ?? ""
@@ -1216,7 +1269,14 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         call.resolve()
     }
 
-    // MARK: - Now Playing Info Methods
+    /// Updates the system Now Playing information for the specified audio asset.
+    /// 
+    /// Looks up stored metadata for `audioId` and publishes title, artist, album, artwork (if provided),
+    /// playback duration, elapsed time, and playback rate to MPNowPlayingInfoCenter. Artwork, when present,
+    /// is loaded asynchronously and applied when available.
+    /// - Parameters:
+    ///   - audioId: The asset identifier used to retrieve Now Playing metadata.
+    ///   - audioAsset: The audio asset used to obtain current playback time and duration.
 
     private func updateNowPlayingInfo(audioId: String, audioAsset: AudioAsset) {
         DispatchQueue.main.async { [weak self] in
@@ -1273,6 +1333,10 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
+    /// Loads an image from a local file path or a remote URL and delivers it to the completion handler.
+    /// - Parameters:
+    ///   - urlString: A string representing either a local file path (plain path or `file://` URL) or a remote URL (e.g., `http://` or `https://`).
+    ///   - completion: Called with the loaded `UIImage` on success, or `nil` if the image could not be loaded.
     private func loadArtwork(from urlString: String, completion: @escaping (UIImage?) -> Void) {
         // Check if it's a local file path or URL
         if let url = URL(string: urlString) {

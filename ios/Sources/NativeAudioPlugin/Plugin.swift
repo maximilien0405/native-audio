@@ -19,6 +19,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "configure", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "preload", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "playOnce", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "isPreloaded", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "play", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pause", returnType: CAPPluginReturnPromise),
@@ -60,6 +61,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     private var showNotification = false
     private var notificationMetadataMap: [String: [String: String]] = [:]
     private var currentlyPlayingAssetId: String?
+
+    // Track playOnce assets for automatic cleanup
+    private var playOnceAssets: Set<String> = []
 
     @objc override public func load() {
         super.load()
@@ -303,6 +307,174 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     @objc func preload(_ call: CAPPluginCall) {
         preloadAsset(call, isComplex: true)
+    }
+
+    @objc func playOnce(_ call: CAPPluginCall) {
+        // Generate unique temporary asset ID
+        let assetId = "playOnce_\(Int(Date().timeIntervalSince1970 * 1000))_\(UUID().uuidString.prefix(8))"
+        
+        // Extract options
+        let assetPath = call.getString(Constant.AssetPathKey) ?? ""
+        let autoPlay = call.getBool("autoPlay") ?? true
+        let deleteAfterPlay = call.getBool("deleteAfterPlay") ?? false
+        let volume = min(max(call.getFloat("volume") ?? Constant.DefaultVolume, Constant.MinVolume), Constant.MaxVolume)
+        let isLocalUrl = call.getBool("isUrl") ?? false
+        
+        if assetPath == "" {
+            call.reject(Constant.ErrorAssetPath)
+            return
+        }
+        
+        // Store notification metadata if provided
+        if let metadata = call.getObject(Constant.NotificationMetadata) {
+            var metadataDict: [String: String] = [:]
+            if let title = metadata["title"] as? String {
+                metadataDict["title"] = title
+            }
+            if let artist = metadata["artist"] as? String {
+                metadataDict["artist"] = artist
+            }
+            if let album = metadata["album"] as? String {
+                metadataDict["album"] = album
+            }
+            if let artworkUrl = metadata["artworkUrl"] as? String {
+                metadataDict["artworkUrl"] = artworkUrl
+            }
+            if !metadataDict.isEmpty {
+                notificationMetadataMap[assetId] = metadataDict
+            }
+        }
+        
+        // Ensure audio session is initialized
+        if !audioSessionInitialized {
+            setupAudioSession()
+        }
+        
+        // Track this as a playOnce asset
+        audioQueue.sync(flags: .barrier) {
+            self.playOnceAssets.insert(assetId)
+        }
+        
+        // Create a completion handler for cleanup
+        let cleanupHandler: () -> Void = { [weak self] in
+            guard let self = self else { return }
+            
+            self.audioQueue.async(flags: .barrier) {
+                guard let asset = self.audioList[assetId] as? AudioAsset else { return }
+                
+                // Get the file path before unloading if we need to delete
+                var filePathToDelete: String?
+                if deleteAfterPlay && isLocalUrl {
+                    // Try to get the file path from the asset
+                    if let audioAsset = asset as? AudioAsset, !asset.channels.isEmpty {
+                        if let url = asset.channels.first?.url {
+                            filePathToDelete = url.path
+                        }
+                    }
+                }
+                
+                // Unload the asset
+                asset.unload()
+                self.audioList[assetId] = nil
+                self.playOnceAssets.remove(assetId)
+                self.notificationMetadataMap.removeValue(forKey: assetId)
+                
+                // Clear notification if this was the currently playing asset
+                if self.currentlyPlayingAssetId == assetId {
+                    self.clearNowPlayingInfo()
+                    self.currentlyPlayingAssetId = nil
+                }
+                
+                // Delete file if requested and it's a local file
+                if let filePath = filePathToDelete {
+                    self.deleteFileIfSafe(path: filePath)
+                }
+            }
+        }
+        
+        // Build preload options
+        var preloadOptions: [String: Any] = [
+            Constant.AssetIdKey: assetId,
+            Constant.AssetPathKey: assetPath,
+            Constant.VolumeKey: volume,
+            "isUrl": isLocalUrl
+        ]
+        
+        if let headers = call.getObject("headers") {
+            preloadOptions["headers"] = headers
+        }
+        
+        // Create a temporary call object for preload
+        let preloadCallData = JSObject(preloadOptions)
+        let preloadCall = CAPPluginCall(callbackId: call.callbackId, options: preloadCallData, success: { (result, pluginCall) in
+            // Preload succeeded, now set up completion and optionally play
+            self.audioQueue.sync {
+                guard let asset = self.audioList[assetId] as? AudioAsset else {
+                    call.reject("Failed to load asset for playOnce")
+                    return
+                }
+                
+                // Set up completion handler
+                asset.onComplete = cleanupHandler
+                
+                // Dispatch complete event
+                asset.onComplete = { [weak self] in
+                    self?.notifyListeners("complete", data: ["assetId": assetId])
+                    cleanupHandler()
+                }
+                
+                // Auto-play if requested
+                if autoPlay {
+                    self.activateSession()
+                    asset.play(time: 0)
+                }
+                
+                // Return the generated assetId
+                call.resolve(["assetId": assetId])
+            }
+        }, error: { (error) in
+            // Cleanup on failure
+            self.audioQueue.async(flags: .barrier) {
+                self.playOnceAssets.remove(assetId)
+                self.notificationMetadataMap.removeValue(forKey: assetId)
+                if let failedAsset = self.audioList[assetId] as? AudioAsset {
+                    failedAsset.unload()
+                    self.audioList[assetId] = nil
+                }
+            }
+            call.reject("Failed to load asset for playOnce: \(error?.localizedDescription ?? "unknown error")")
+        })
+        
+        // Call preloadAsset with the temporary call
+        preloadAsset(preloadCall, isComplex: true)
+    }
+    
+    private func deleteFileIfSafe(path: String) {
+        let fileManager = FileManager.default
+        
+        // Safety checks before deleting
+        guard path.hasPrefix("/") || path.hasPrefix("file://") else {
+            print("Skipping file deletion: path is not absolute (\(path))")
+            return
+        }
+        
+        // Don't delete files in system directories or app bundle
+        let protectedPaths = ["/System/", "/Library/", "/Applications/", ".app/"]
+        for protectedPath in protectedPaths {
+            if path.contains(protectedPath) {
+                print("Skipping file deletion: path is in protected directory (\(path))")
+                return
+            }
+        }
+        
+        do {
+            if fileManager.fileExists(atPath: path) {
+                try fileManager.removeItem(atPath: path)
+                print("Deleted file after playOnce: \(path)")
+            }
+        } catch {
+            print("Error deleting file after playOnce: \(error.localizedDescription)")
+        }
     }
 
     func activateSession() {

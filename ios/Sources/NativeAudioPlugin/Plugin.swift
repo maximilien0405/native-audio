@@ -523,25 +523,35 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     private func deleteFileIfSafe(path: String) {
         let fileManager = FileManager.default
         
-        // Safety checks before deleting
-        guard path.hasPrefix("/") || path.hasPrefix("file://") else {
-            print("Skipping file deletion: path is not absolute (\(path))")
+        // Resolve symlinks and get absolute path
+        let resolvedPath: String
+        if path.hasPrefix("file://") {
+            resolvedPath = URL(string: path)?.resolvingSymlinksInPath().path ?? ""
+        } else {
+            resolvedPath = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        }
+        
+        guard !resolvedPath.isEmpty else {
+            print("Skipping file deletion: cannot resolve path (\(path))")
             return
         }
         
-        // Don't delete files in system directories or app bundle
-        let protectedPaths = ["/System/", "/Library/", "/Applications/", ".app/"]
-        for protectedPath in protectedPaths {
-            if path.contains(protectedPath) {
-                print("Skipping file deletion: path is in protected directory (\(path))")
-                return
-            }
+        // Only allow deletion in app's sandbox directories
+        let allowedPrefixes = [
+            NSTemporaryDirectory(),
+            FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.path ?? "",
+            FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.path ?? ""
+        ]
+        
+        guard allowedPrefixes.contains(where: { resolvedPath.hasPrefix($0) }) else {
+            print("Skipping file deletion: path outside allowed directories (\(resolvedPath))")
+            return
         }
         
         do {
-            if fileManager.fileExists(atPath: path) {
-                try fileManager.removeItem(atPath: path)
-                print("Deleted file after playOnce: \(path)")
+            if fileManager.fileExists(atPath: resolvedPath) {
+                try fileManager.removeItem(atPath: resolvedPath)
+                print("Deleted file after playOnce: \(resolvedPath)")
             }
         } catch {
             print("Error deleting file after playOnce: \(error.localizedDescription)")

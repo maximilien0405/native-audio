@@ -335,15 +335,9 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                                     }
 
                                     if (assetPath.endsWith(".m3u8")) {
-                                        // HLS Stream - check if HLS support is available
-                                        if (HlsAvailabilityChecker.isHlsAvailable()) {
-                                            StreamAudioAsset streamAudioAsset = new StreamAudioAsset(
-                                                plugin,
-                                                assetId,
-                                                uri,
-                                                volume,
-                                                requestHeaders
-                                            );
+                                        // HLS Stream - try to create using helper method
+                                        AudioAsset streamAudioAsset = plugin.createStreamAudioAsset(assetId, uri, volume, requestHeaders);
+                                        if (streamAudioAsset != null) {
                                             plugin.audioAssetList.put(assetId, streamAudioAsset);
                                         } else {
                                             // Fall back to RemoteAudioAsset when HLS is not available

@@ -913,23 +913,17 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                 }
 
                 if (assetPath.endsWith(".m3u8")) {
-                    // HLS Stream - try to create using helper method
-                    AudioAsset streamAudioAsset = createStreamAudioAsset(assetId, uri, volume, requestHeaders);
-                    if (streamAudioAsset != null) {
-                        return streamAudioAsset;
-                    } else {
-                        // Fall back to RemoteAudioAsset when HLS is not available
-                        Log.w(TAG, "HLS not available for .m3u8, falling back to RemoteAudioAsset");
-                        RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(
-                            this,
-                            assetId,
-                            uri,
-                            audioChannelNum,
-                            volume,
-                            requestHeaders
+                    // HLS Stream - check if HLS support is available
+                    if (!HlsAvailabilityChecker.isHlsAvailable()) {
+                        throw new Exception(
+                            "HLS streaming (.m3u8) is not available. " + "Set 'hls: true' in capacitor.config.ts and run 'npx cap sync'."
                         );
-                        return remoteAudioAsset;
                     }
+                    AudioAsset streamAudioAsset = createStreamAudioAsset(assetId, uri, volume, requestHeaders);
+                    if (streamAudioAsset == null) {
+                        throw new Exception("Failed to create HLS stream player. HLS may not be configured.");
+                    }
+                    return streamAudioAsset;
                 } else {
                     RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(this, assetId, uri, audioChannelNum, volume, requestHeaders);
                     return remoteAudioAsset;

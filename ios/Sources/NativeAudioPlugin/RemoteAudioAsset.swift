@@ -235,7 +235,7 @@ public class RemoteAudioAsset: AudioAsset {
         }
     }
 
-    private func cleanupNotificationObservers() {
+    internal func cleanupNotificationObservers() {
         for observer in notificationObservers {
             NotificationCenter.default.removeObserver(observer)
         }

@@ -59,7 +59,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     // Notification center support
     private var showNotification = false
-    private var notificationMetadataMap: [String: [String: String]] = [:]
+    internal var notificationMetadataMap: [String: [String: String]] = [:]
     private var currentlyPlayingAssetId: String?
 
     // Track playOnce assets for automatic cleanup

@@ -1,7 +1,7 @@
 import XCTest
 import Capacitor
 import AVFoundation
-@testable import NativeAudio
+@testable import NativeAudioPlugin
 
 class PluginTests: XCTestCase {
 

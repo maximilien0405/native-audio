@@ -123,7 +123,8 @@ class PluginTests: XCTestCase {
                 withPath: testURL,
                 withChannels: 1,
                 withVolume: 0.6,
-                withFadeDelay: 0.3
+                withFadeDelay: 0.3,
+                withHeaders: nil
             )
 
             // Add it to the plugin's audio list
@@ -226,7 +227,8 @@ class PluginTests: XCTestCase {
                 withPath: testURL,
                 withChannels: 1,
                 withVolume: 0.6,
-                withFadeDelay: 0.3
+                withFadeDelay: 0.3,
+                withHeaders: nil
             )
 
             // Add it to the plugin's audio list

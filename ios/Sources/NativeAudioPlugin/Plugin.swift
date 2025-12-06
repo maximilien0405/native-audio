@@ -38,7 +38,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         CAPPluginMethod(name: "deinitPlugin", returnType: CAPPluginReturnPromise)
     ]
     internal let audioQueue = DispatchQueue(label: "ee.forgr.audio.queue", qos: .userInitiated, attributes: .concurrent)
-    private var audioList: [String: Any] = [:] {
+    internal var audioList: [String: Any] = [:] {
         didSet {
             // Ensure audioList modifications happen on audioQueue
             assert(DispatchQueue.getSpecific(key: queueKey) != nil)
@@ -63,7 +63,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     private var currentlyPlayingAssetId: String?
 
     // Track playOnce assets for automatic cleanup
-    private var playOnceAssets: Set<String> = []
+    internal var playOnceAssets: Set<String> = []
 
     @objc override public func load() {
         super.load()

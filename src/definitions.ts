@@ -148,7 +148,7 @@ export interface PlayOnceOptions {
    * Delete the audio file from disk after playback completes
    * Only works for local files (file:// URLs), ignored for remote URLs
    * @default false
-   * @since 7.12.0
+   * @since 7.11.0
    */
   deleteAfterPlay?: boolean;
   /**

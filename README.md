@@ -305,6 +305,8 @@ await NativeAudio.stop({ assetId });
 **Notes:**
 - Assets are automatically cleaned up after playback completes or on error
 - `deleteAfterPlay` only works for local `file://` URLs, not remote URLs
+- File deletion is restricted to safe directories only (app cache, files, external cache/files)
+- Files outside safe directories will be skipped with a warning in logs
 - The returned `assetId` can be used with `play()`, `stop()`, `unload()` methods
 - Manual cleanup via `stop()` or `unload()` is optional but supported
 

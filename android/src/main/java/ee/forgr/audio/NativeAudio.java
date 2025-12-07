@@ -381,45 +381,40 @@ final String filePathToDelete =
                                         NativeAudio.this.dispatchComplete(completedAssetId);
 
                                         // Then perform cleanup
-                                        NativeAudio.this.getActivity().runOnUiThread(
-                                            new Runnable() {
-                                                @Override
-                                                public void run() {
+                                        NativeAudio.this.getActivity().runOnUiThread(() -> {
+                                            try {
+                                                // Unload the asset
+                                                AudioAsset assetToUnload = NativeAudio.this.audioAssetList.get(assetId);
+                                                if (assetToUnload != null) {
+                                                    assetToUnload.unload();
+                                                    NativeAudio.this.audioAssetList.remove(assetId);
+                                                }
+
+                                                // Remove from tracking sets
+                                                NativeAudio.this.playOnceAssets.remove(assetId);
+                                                NativeAudio.this.notificationMetadataMap.remove(assetId);
+
+                                                // Clear notification if this was the currently playing asset
+                                                if (assetId.equals(NativeAudio.this.currentlyPlayingAssetId)) {
+                                                    NativeAudio.this.clearNotification();
+                                                    NativeAudio.this.currentlyPlayingAssetId = null;
+                                                }
+
+                                                // Delete file if requested
+                                                if (filePathToDelete != null) {
                                                     try {
-                                                        // Unload the asset
-                                                        AudioAsset assetToUnload = NativeAudio.this.audioAssetList.get(assetId);
-                                                        if (assetToUnload != null) {
-                                                            assetToUnload.unload();
-                                                            NativeAudio.this.audioAssetList.remove(assetId);
-                                                        }
-
-                                                        // Remove from tracking sets
-                                                        NativeAudio.this.playOnceAssets.remove(assetId);
-                                                        NativeAudio.this.notificationMetadataMap.remove(assetId);
-
-                                                        // Clear notification if this was the currently playing asset
-                                                        if (assetId.equals(NativeAudio.this.currentlyPlayingAssetId)) {
-                                                            NativeAudio.this.clearNotification();
-                                                            NativeAudio.this.currentlyPlayingAssetId = null;
-                                                        }
-
-                                                        // Delete file if requested
-                                                        if (filePathToDelete != null) {
-                                                            try {
-                                                                File fileToDelete = new File(URI.create(filePathToDelete));
-                                                                if (fileToDelete.exists() && fileToDelete.delete()) {
-                                                                    Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
-                                                                }
-                                                            } catch (Exception e) {
-                                                                Log.e(TAG, "Error deleting file after playOnce: " + filePathToDelete, e);
-                                                            }
+                                                        File fileToDelete = new File(URI.create(filePathToDelete));
+                                                        if (fileToDelete.exists() && fileToDelete.delete()) {
+                                                            Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
                                                         }
                                                     } catch (Exception e) {
-                                                        Log.e(TAG, "Error during playOnce cleanup: " + e.getMessage());
+                                                        Log.e(TAG, "Error deleting file after playOnce: " + filePathToDelete, e);
                                                     }
                                                 }
+                                            } catch (Exception e) {
+                                                Log.e(TAG, "Error during playOnce cleanup: " + e.getMessage());
                                             }
-                                        );
+                                        });
                                     }
                                 }
                             );

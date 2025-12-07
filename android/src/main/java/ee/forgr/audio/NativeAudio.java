@@ -91,7 +91,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     private Set<String> playOnceAssets = new HashSet<>();
 
     /**
-     * Initializes plugin runtime state by obtaining the system AudioManager, preparing the asset map,
+     * Initializes plugin runtime state by obtaining the system {@link AudioManager}, preparing the asset map,
      * and recording the device's original audio mode without requesting audio focus.
      */
     @Override

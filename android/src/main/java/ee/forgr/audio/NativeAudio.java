@@ -315,7 +315,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                         // Extract options
                         String assetPath = call.getString("assetPath");
                         if (!NativeAudio.this.isStringValid(assetPath)) {
-                            call.reject(ERROR_ASSET_PATH_MISSING);
+                            call.reject("Asset Path is missing - " + assetPath);
                             return;
                         }
 

@@ -314,7 +314,7 @@ class PluginTests: XCTestCase {
     func testPlayOnceWithAutoPlay() {
         let expectation = XCTestExpectation(description: "PlayOnce with auto-play")
         var returnedAssetId: String?
-        
+
         let call = CAPPluginCall(callbackId: "test", options: [
             "assetPath": tempFileURL.path,
             "volume": 1.0,
@@ -326,18 +326,18 @@ class PluginTests: XCTestCase {
         }, error: { (_) in
             XCTFail("PlayOnce shouldn't fail")
         })!
-        
+
         plugin.playOnce(call)
-        
+
         plugin.executeOnAudioQueue {
-            
+
             // Wait for async operations
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 // Verify asset was created and is in playOnceAssets
                 self.plugin.executeOnAudioQueue {
                     let playOnceAssets = self.plugin.playOnceAssets
                     XCTAssertTrue(playOnceAssets.count > 0, "Should have created a playOnce asset")
-                    
+
                     // Verify the returned assetId matches an entry in playOnceAssets and audioList
                     if let assetId = returnedAssetId {
                         XCTAssertTrue(playOnceAssets.contains(assetId), "Returned assetId should be in playOnceAssets")
@@ -345,18 +345,18 @@ class PluginTests: XCTestCase {
                     } else {
                         XCTFail("Should have returned an assetId")
                     }
-                    
+
                     expectation.fulfill()
                 }
             }
         }
-        
+
         wait(for: [expectation], timeout: 3.0)
     }
 
     func testPlayOnceWithoutAutoPlay() {
         let expectation = XCTestExpectation(description: "PlayOnce without auto-play")
-        
+
         let call = CAPPluginCall(callbackId: "test", options: [
             "assetPath": tempFileURL.path,
             "volume": 0.8,
@@ -367,40 +367,40 @@ class PluginTests: XCTestCase {
         }, error: { (_) in
             XCTFail("PlayOnce shouldn't fail")
         })!
-        
+
         plugin.playOnce(call)
-        
+
         plugin.executeOnAudioQueue {
-            
+
             // Wait for async operations
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.plugin.executeOnAudioQueue {
                     // Asset should be created but not playing
                     let playOnceAssets = self.plugin.playOnceAssets
                     XCTAssertTrue(playOnceAssets.count > 0, "Should have created a playOnce asset")
-                    
+
                     if let assetId = playOnceAssets.first,
                        let asset = self.plugin.audioList[assetId] as? AudioAsset {
                         // Verify asset exists but is not automatically playing
                         XCTAssertFalse(asset.channels.isEmpty, "Asset should have channels")
-                        
+
                         // Verify player is not playing when autoPlay is false
                         if let player = asset.channels.first {
                             XCTAssertFalse(player.isPlaying, "Player should not be playing when autoPlay is false")
                         }
                     }
-                    
+
                     expectation.fulfill()
                 }
             }
         }
-        
+
         wait(for: [expectation], timeout: 3.0)
     }
 
     func testPlayOnceCleanupAfterCompletion() {
         let expectation = XCTestExpectation(description: "PlayOnce cleanup after completion")
-        
+
         let call = CAPPluginCall(callbackId: "test", options: [
             "assetPath": tempFileURL.path,
             "volume": 1.0,
@@ -411,11 +411,11 @@ class PluginTests: XCTestCase {
         }, error: { (_) in
             XCTFail("PlayOnce shouldn't fail")
         })!
-        
+
         plugin.playOnce(call)
-        
+
         plugin.executeOnAudioQueue {
-            
+
             // Get the asset ID
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 self.plugin.executeOnAudioQueue {
@@ -424,39 +424,39 @@ class PluginTests: XCTestCase {
                         expectation.fulfill()
                         return
                     }
-                    
+
                     // Verify asset exists
                     XCTAssertNotNil(self.plugin.audioList[assetId], "Asset should exist")
-                    
+
                     // Simulate completion
                     if let asset = self.plugin.audioList[assetId] as? AudioAsset {
                         asset.onComplete?()
                     }
-                    
+
                     // Wait for cleanup
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         self.plugin.executeOnAudioQueue {
                             // Verify cleanup occurred
                             XCTAssertNil(self.plugin.audioList[assetId], "Asset should be removed after cleanup")
                             XCTAssertFalse(self.plugin.playOnceAssets.contains(assetId), "AssetId should be removed from playOnceAssets")
-                            
+
                             expectation.fulfill()
                         }
                     }
                 }
             }
         }
-        
+
         wait(for: [expectation], timeout: 5.0)
     }
 
     func testPlayOnceWithDeleteAfterPlay() {
         let expectation = XCTestExpectation(description: "PlayOnce with file deletion")
-        
+
         // Create a temporary file that can be deleted
         let deletableFilePath = NSTemporaryDirectory().appending("deletableAudio.wav")
         let deletableURL = URL(fileURLWithPath: deletableFilePath)
-        
+
         // Copy test file to deletable location
         do {
             // Remove existing file if present
@@ -469,7 +469,7 @@ class PluginTests: XCTestCase {
             expectation.fulfill()
             return
         }
-        
+
         let call = CAPPluginCall(callbackId: "test", options: [
             "assetPath": deletableURL.absoluteString,
             "volume": 1.0,
@@ -481,11 +481,11 @@ class PluginTests: XCTestCase {
         }, error: { (_) in
             XCTFail("PlayOnce shouldn't fail")
         })!
-        
+
         plugin.playOnce(call)
-        
+
         plugin.executeOnAudioQueue {
-            
+
             // Wait for asset creation
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 self.plugin.executeOnAudioQueue {
@@ -494,33 +494,33 @@ class PluginTests: XCTestCase {
                         expectation.fulfill()
                         return
                     }
-                    
+
                     // Verify file exists before completion
                     XCTAssertTrue(FileManager.default.fileExists(atPath: deletableFilePath), "File should exist before cleanup")
-                    
+
                     // Simulate completion
                     if let asset = self.plugin.audioList[assetId] as? AudioAsset {
                         asset.onComplete?()
                     }
-                    
+
                     // Wait for cleanup and deletion
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         // File should be deleted after cleanup
                         let fileExists = FileManager.default.fileExists(atPath: deletableFilePath)
                         XCTAssertFalse(fileExists, "File should be deleted after playOnce completion")
-                        
+
                         expectation.fulfill()
                     }
                 }
             }
         }
-        
+
         wait(for: [expectation], timeout: 5.0)
     }
 
     func testPlayOnceWithNotificationMetadata() {
         let expectation = XCTestExpectation(description: "PlayOnce with notification metadata")
-        
+
         let call = CAPPluginCall(callbackId: "test", options: [
             "assetPath": tempFileURL.path,
             "volume": 1.0,
@@ -537,11 +537,11 @@ class PluginTests: XCTestCase {
         }, error: { (_) in
             XCTFail("PlayOnce shouldn't fail")
         })!
-        
+
         plugin.playOnce(call)
-        
+
         plugin.executeOnAudioQueue {
-            
+
             // Wait for async operations
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.plugin.executeOnAudioQueue {
@@ -550,7 +550,7 @@ class PluginTests: XCTestCase {
                         expectation.fulfill()
                         return
                     }
-                    
+
                     // Verify notification metadata was stored
                     if let metadata = self.plugin.notificationMetadataMap[assetId] {
                         XCTAssertEqual(metadata["title"], "Test Song", "Title should be stored")
@@ -560,18 +560,18 @@ class PluginTests: XCTestCase {
                     } else {
                         XCTFail("Notification metadata should be stored")
                     }
-                    
+
                     expectation.fulfill()
                 }
             }
         }
-        
+
         wait(for: [expectation], timeout: 3.0)
     }
 
     func testPlayOnceErrorHandlingAndCleanup() {
         let expectation = XCTestExpectation(description: "PlayOnce error handling and cleanup")
-        
+
         // Use an invalid file path to trigger error
         let call = CAPPluginCall(callbackId: "test", options: [
             "assetPath": "/invalid/path/to/nonexistent.wav",
@@ -583,13 +583,13 @@ class PluginTests: XCTestCase {
         }, error: { (_) in
             // Expected error case
         })!
-        
+
         plugin.playOnce(call)
-        
+
         plugin.executeOnAudioQueue {
             // Capture any assetId that might have been created
             let initialAssetIds = self.plugin.playOnceAssets
-            
+
             // Wait for error handling
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.plugin.executeOnAudioQueue {
@@ -598,24 +598,24 @@ class PluginTests: XCTestCase {
                     for assetId in initialAssetIds {
                         XCTAssertNil(self.plugin.audioList[assetId], "Failed asset should be cleaned up from audioList")
                     }
-                    
+
                     // And no dangling playOnce IDs should remain
                     XCTAssertTrue(self.plugin.playOnceAssets.isEmpty, "playOnce assets should be cleaned up on error")
-                    
+
                     expectation.fulfill()
                 }
             }
         }
-        
+
         wait(for: [expectation], timeout: 3.0)
     }
 
     func testPlayOnceReturnsUniqueAssetId() {
         let expectation = XCTestExpectation(description: "PlayOnce returns unique asset ID")
-        
+
         var firstAssetId: String?
         var secondAssetId: String?
-        
+
         let call1 = CAPPluginCall(callbackId: "test1", options: [
             "assetPath": tempFileURL.path,
             "volume": 1.0,
@@ -627,9 +627,9 @@ class PluginTests: XCTestCase {
         }, error: { (_) in
             XCTFail("PlayOnce shouldn't fail")
         })!
-        
+
         plugin.playOnce(call1)
-        
+
         // Create second playOnce
         let call2 = CAPPluginCall(callbackId: "test2", options: [
             "assetPath": tempFileURL.path,
@@ -642,9 +642,9 @@ class PluginTests: XCTestCase {
         }, error: { (_) in
             XCTFail("PlayOnce shouldn't fail")
         })!
-        
+
         plugin.playOnce(call2)
-        
+
         // Wait for both to complete
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.plugin.executeOnAudioQueue {
@@ -652,22 +652,22 @@ class PluginTests: XCTestCase {
                 XCTAssertNotNil(firstAssetId, "First asset ID should exist")
                 XCTAssertNotNil(secondAssetId, "Second asset ID should exist")
                 XCTAssertNotEqual(firstAssetId, secondAssetId, "Asset IDs should be unique")
-                
+
                 // Verify both have "playOnce_" prefix
                 XCTAssertTrue(firstAssetId?.hasPrefix("playOnce_") ?? false, "First asset ID should have playOnce prefix")
                 XCTAssertTrue(secondAssetId?.hasPrefix("playOnce_") ?? false, "Second asset ID should have playOnce prefix")
-                
+
                 // Cross-check that both are present in playOnceAssets as internal consistency check
                 if let id1 = firstAssetId, let id2 = secondAssetId {
                     XCTAssertTrue(self.plugin.playOnceAssets.contains(id1), "First assetId should be tracked internally")
                     XCTAssertTrue(self.plugin.playOnceAssets.contains(id2), "Second assetId should be tracked internally")
                     XCTAssertEqual(self.plugin.playOnceAssets.count, 2, "Should have two playOnce assets tracked")
                 }
-                
+
                 expectation.fulfill()
             }
         }
-        
+
         wait(for: [expectation], timeout: 5.0)
     }
 }

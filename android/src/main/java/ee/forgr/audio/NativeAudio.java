@@ -262,15 +262,15 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     }
 
     /**
-         * Begin preloading an audio asset specified by the given plugin call.
-         *
-         * <p>The call must include `assetId` and `assetPath`. It may also include `isUrl`, `isComplex`,
-         * `headers`, `volume`, `audioChannelNum`, and optional notification metadata (title, artist,
-         * album, artworkUrl). The preload operation is scheduled on the UI thread and the provided
-         * PluginCall will be resolved on success or rejected with an error.
-         *
-         * @param call the PluginCall containing preload options and metadata for the asset
-         */
+     * Begin preloading an audio asset specified by the given plugin call.
+     *
+     * <p>The call must include `assetId` and `assetPath`. It may also include `isUrl`, `isComplex`,
+     * `headers`, `volume`, `audioChannelNum`, and optional notification metadata (title, artist,
+     * album, artworkUrl). The preload operation is scheduled on the UI thread and the provided
+     * PluginCall will be resolved on success or rejected with an error.
+     *
+     * @param call the PluginCall containing preload options and metadata for the asset
+     */
     @PluginMethod
     public void preload(final PluginCall call) {
         this.getActivity().runOnUiThread(

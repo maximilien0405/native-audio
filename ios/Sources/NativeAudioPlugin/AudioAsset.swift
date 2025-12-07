@@ -434,7 +434,7 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
     }
 
     /// Handles an AVAudioPlayer finishing playback by notifying listeners, invoking the public completion callback, and forwarding the completion to the owner.
-    /// 
+    ///
     /// This is called when a player finishes playing; the notifications and callback are dispatched on the audio queue. Notifications are sent to listeners with the asset's `assetId`, then `onComplete` is invoked if set, and finally the event is forwarded to the owner.
     /// - Parameters:
     ///   - player: The `AVAudioPlayer` instance that finished playback.
@@ -508,7 +508,7 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
     }
 
     /// Stops and clears the periodic current-time update timer, ensuring invalidation occurs on the main thread.
-    /// 
+    ///
     /// This method is safe to call from any thread; if not currently on the main thread the invalidation is dispatched to the main queue.
     internal func stopCurrentTimeUpdates() {
         if Thread.isMainThread {

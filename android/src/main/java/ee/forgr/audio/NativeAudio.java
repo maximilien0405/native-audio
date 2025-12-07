@@ -279,13 +279,16 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
      * headers for remote requests, and optional deletion of local source files after playback.
      *
      * @param call Capacitor PluginCall containing options:
-     *             - "assetPath" (required): path or URL to the audio file;
-     *             - "volume" (optional): playback volume (0.1–1.0), default 1.0;
-     *             - "isUrl" (optional): treat assetPath as a URL when true, default false;
-     *             - "autoPlay" (optional): start playback immediately when true, default true;
-     *             - "deleteAfterPlay" (optional): delete the local file after playback when true, default false;
-     *             - "headers" (optional): JS object of HTTP headers for remote requests;
-     *             - "notificationMetadata" (optional): object with "title", "artist", "album", "artworkUrl" for notification display.
+     * <ul>
+     *   <li><code>assetPath</code> (required): path or URL to the audio file;</li>
+     *   <li><code>volume</code> (optional): playback volume (0.1–1.0), default 1.0;</li>
+     *   <li><code>isUrl</code> (optional): treat <code>assetPath</code> as a URL when true, default false;</li>
+     *   <li><code>autoPlay</code> (optional): start playback immediately when true, default true;</li>
+     *   <li><code>deleteAfterPlay</code> (optional): delete the local file after playback when true, default false;</li>
+     *   <li><code>headers</code> (optional): JS object of HTTP headers for remote requests;</li>
+     *   <li><code>notificationMetadata</code> (optional): object with <code>title</code>, <code>artist</code>,
+     *       <code>album</code>, <code>artworkUrl</code> for notification display.</li>
+     * </ul>
      */
     @PluginMethod
     public void playOnce(final PluginCall call) {

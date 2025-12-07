@@ -337,6 +337,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     ///
     /// This is a convenience method that combines preload, play, and unload into a single call.
     /// The audio asset is automatically cleaned up after playback completes or if an error occurs.
+    /// Preloads and optionally plays a one-shot audio asset, then removes it from internal storage after completion.
+    ///
+    /// The method generates a unique temporary asset identifier, loads the asset from a local file, a public bundle resource, or a remote URL (with optional headers), and tracks it as a transient "play-once" asset. If `autoPlay` is true the asset will begin playback immediately and the plugin's audio session will be activated. When playback completes (or when the asset is unloaded), the asset and any associated Now Playing metadata are removed. If `deleteAfterPlay` is true and the source was a local file URL, the file is deleted from disk if it passes safe-sandbox checks.
     ///
     /// - Parameter call: The Capacitor plugin call containing:
     ///   - `assetPath`: Path to the audio file (required)
@@ -345,29 +348,6 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     ///   - `autoPlay`: Start playback immediately (default: true)
     ///   - `deleteAfterPlay`: Delete file after playback (default: false)
     ///   - `notificationMetadata`: Metadata for Now Playing info (optional)
-    ///
-    /// Plays a single-use audio asset identified by a generated temporary assetId; optionally auto-plays, shows Now Playing metadata, and deletes a local file after playback.
-    /// - Parameters:
-    ///   - call: Plugin call containing options:
-    ///     - "assetPath": String — required path or URL to the audio asset.
-    ///     - "autoPlay": Bool — play immediately when loaded (default `true`).
-    ///     - "deleteAfterPlay": Bool — delete the local file after playback (default `false`).
-    ///     - "volume": Float — initial volume, clamped to the plugin's allowed range.
-    ///     - "isUrl": Bool — treat `assetPath` as a plain local path when `true` (default `false`).
-    ///     - "headers": Object — optional HTTP headers for remote URLs (string values).
-    ///     - Notification metadata (object under `Constant.NotificationMetadata`): optional keys `title`, `artist`, `album`, `artworkUrl` used for Now Playing.
-    /// Preloads and optionally plays a one-shot audio asset, then removes it from internal storage after completion.
-    ///
-    /// The method generates a unique temporary asset identifier, loads the asset from a local file, a public bundle resource, or a remote URL (with optional headers), and tracks it as a transient "play-once" asset. If `autoPlay` is true the asset will begin playback immediately and the plugin's audio session will be activated. When playback completes (or when the asset is unloaded), the asset and any associated Now Playing metadata are removed. If `deleteAfterPlay` is true and the source was a local file URL, the file is deleted from disk if it passes safe-sandbox checks.
-    ///
-    /// Expected keys on the provided CAPPluginCall:
-    /// - `assetPath` (String): Path or URL of the audio resource (required).
-    /// - `autoPlay` (Bool): Whether to start playback immediately; defaults to `true`.
-    /// - `deleteAfterPlay` (Bool): Whether to delete a local file after playback; defaults to `false`.
-    /// - `volume` (Float): Initial volume, clamped to allowed range.
-    /// - `isUrl` (Bool): When true, treat `assetPath` as a plain file path even if it looks like a URL.
-    /// - `headers` (Object): Optional HTTP headers to use for remote URLs.
-    /// - `notificationMetadata` (Object): Optional Now Playing metadata with `title`, `artist`, `album`, and `artworkUrl`.
     ///
     /// The call is resolved with `["assetId": "<generated id>"]` on success or rejected with an error message on failure.
     @objc func playOnce(_ call: CAPPluginCall) {

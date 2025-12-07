@@ -313,7 +313,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                             "playOnce_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
 
                         // Extract options
-                        String assetPath = call.getString(ASSET_PATH);
+                        String assetPath = call.getString("assetPath");
                         if (!NativeAudio.this.isStringValid(assetPath)) {
                             call.reject(ERROR_ASSET_PATH_MISSING);
                             return;

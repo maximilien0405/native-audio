@@ -359,9 +359,6 @@ call.reject(ERROR_AUDIO_EXISTS + " - " + assetId);
                                 headersObj
                             );
 
-                            if (asset == null) {
-                                throw new Exception("Failed to load asset");
-                            }
 
                             // Add to asset list; completion listener is set below with cleanup
                             NativeAudio.this.audioAssetList.put(assetId, asset);

@@ -345,7 +345,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                         try {
                             // Check if asset already exists
                             if (NativeAudio.this.audioAssetList.containsKey(assetId)) {
-                                throw new Exception(ERROR_AUDIO_EXISTS + " - " + assetId);
+call.reject(ERROR_AUDIO_EXISTS + " - " + assetId);
                             }
 
                             // Load the asset using the helper method

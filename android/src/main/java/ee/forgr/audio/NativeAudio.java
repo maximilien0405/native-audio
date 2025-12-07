@@ -367,12 +367,10 @@ call.reject(ERROR_AUDIO_EXISTS + " - " + assetId);
                             NativeAudio.this.audioAssetList.put(assetId, asset);
 
                             // Store the file path if we need to delete it later
-                            final String filePathToDelete;
-                            if (deleteAfterPlay && isLocalUrl && assetPath.startsWith("file://")) {
-                                filePathToDelete = assetPath;
-                            } else {
-                                filePathToDelete = null;
-                            }
+final String filePathToDelete =
+        (deleteAfterPlay && isLocalUrl && assetPath.startsWith("file://"))
+        ? assetPath
+        : null;
 
                             // Set up completion listener for automatic cleanup
                             asset.setCompletionListener(

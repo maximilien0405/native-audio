@@ -400,71 +400,12 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                                                                 plugin.currentlyPlayingAssetId = null;
                                                             }
 
-                                                            // Delete file if requested (with safety checks)
+                                                            // Delete file if requested
                                                             if (filePathToDelete != null) {
                                                                 try {
-                                                                    File fileToDelete;
-                                                                    try {
-                                                                        // Try to parse as URI first
-                                                                        fileToDelete = new File(URI.create(filePathToDelete));
-                                                                    } catch (IllegalArgumentException e) {
-                                                                        // If URI parsing fails, treat as raw file path
-                                                                        Log.d(
-                                                                            TAG,
-                                                                            "Invalid URI format, using raw path: " + filePathToDelete
-                                                                        );
-                                                                        fileToDelete = new File(filePathToDelete);
-                                                                    }
-
-                                                                    // Validate the file is within safe directories
-                                                                    String canonicalPath = fileToDelete.getCanonicalPath();
-                                                                    String cacheDir = plugin.getContext().getCacheDir().getCanonicalPath();
-                                                                    String filesDir = plugin.getContext().getFilesDir().getCanonicalPath();
-                                                                    String externalCacheDir = plugin.getContext().getExternalCacheDir() !=
-                                                                        null
-                                                                        ? plugin.getContext().getExternalCacheDir().getCanonicalPath()
-                                                                        : null;
-                                                                    String externalFilesDir = plugin
-                                                                            .getContext()
-                                                                            .getExternalFilesDir(null) !=
-                                                                        null
-                                                                        ? plugin.getContext().getExternalFilesDir(null).getCanonicalPath()
-                                                                        : null;
-
-                                                                    // Check if file is in a safe directory
-                                                                    boolean isSafe =
-                                                                        canonicalPath.startsWith(cacheDir) ||
-                                                                        canonicalPath.startsWith(filesDir) ||
-                                                                        (externalCacheDir != null &&
-                                                                            canonicalPath.startsWith(externalCacheDir)) ||
-                                                                        (externalFilesDir != null &&
-                                                                            canonicalPath.startsWith(externalFilesDir));
-
-                                                                    if (!isSafe) {
-                                                                        Log.w(
-                                                                            TAG,
-                                                                            "Skipping file deletion: path outside safe directories - " +
-                                                                                canonicalPath
-                                                                        );
-                                                                        return;
-                                                                    }
-
-                                                                    // Additional check: prevent deletion of directories
-                                                                    if (fileToDelete.isDirectory()) {
-                                                                        Log.w(
-                                                                            TAG,
-                                                                            "Skipping file deletion: path is a directory - " + canonicalPath
-                                                                        );
-                                                                        return;
-                                                                    }
-
+                                                                    File fileToDelete = new File(URI.create(filePathToDelete));
                                                                     if (fileToDelete.exists() && fileToDelete.delete()) {
                                                                         Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
-                                                                    } else {
-                                                                        Log.w(
-                                                                            TAG,
-                                                                            "File does not exist or deletion failed: " + filePathToDelete
-                                                                        );
                                                                     }
                                                                 } catch (Exception e) {
                                                                     Log.e(

@@ -430,7 +430,22 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
                 // Delete file if requested and it's a local file
                 if let filePath = filePathToDelete {
-                    self.deleteFileIfSafe(path: filePath)
+                    let fileManager = FileManager.default
+                    let resolvedPath: String
+                    if filePath.hasPrefix("file://") {
+                        resolvedPath = URL(string: filePath)?.path ?? filePath
+                    } else {
+                        resolvedPath = filePath
+                    }
+                    
+                    do {
+                        if fileManager.fileExists(atPath: resolvedPath) {
+                            try fileManager.removeItem(atPath: resolvedPath)
+                            print("Deleted file after playOnce: \(resolvedPath)")
+                        }
+                    } catch {
+                        print("Error deleting file after playOnce: \(error.localizedDescription)")
+                    }
                 }
             }
         }
@@ -581,89 +596,6 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
             // Return the generated assetId
             call.resolve(["assetId": assetId])
-        }
-    }
-
-    /// Validates whether a file path is safe for deletion.
-    ///
-    /// Checks that the resolved path (after symlink resolution) is:
-    /// 1. Non-empty and resolvable
-    /// 2. Located within app sandbox directories (temp, caches, or documents)
-    /// 3. Not a directory
-    ///
-    /// - Parameter path: A filesystem path or `file://` URL string to validate.
-    /// Validates that a filesystem path can be safely deleted from the app sandbox and returns its resolved absolute path.
-    ///
-    /// Resolves symlinks and converts `file://` URLs or file paths to a canonical absolute path, then verifies the path is located inside the app's temporary, caches, or documents directories and is not a directory. If any check fails, returns `nil`.
-    /// - Parameter path: A file system path string or a `file://` URL string.
-    /// - Returns: The resolved absolute filesystem path if it is safe to delete, or `nil` otherwise.
-    private func isDeletableFile(path: String) -> String? {
-        let fileManager = FileManager.default
-
-        // Resolve symlinks and get absolute path
-        let resolvedPath: String
-        if path.hasPrefix("file://") {
-            resolvedPath = URL(string: path)?.resolvingSymlinksInPath().path ?? ""
-        } else {
-            resolvedPath = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
-        }
-
-        guard !resolvedPath.isEmpty else {
-            print("Skipping file deletion: cannot resolve path (\(path))")
-            return nil
-        }
-
-        // Only allow deletion in app's sandbox directories
-        let allowedPrefixes = [
-            NSTemporaryDirectory(),
-            FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.path ?? "",
-            FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.path ?? ""
-        ]
-
-        guard allowedPrefixes.contains(where: { resolvedPath.hasPrefix($0) }) else {
-            print("Skipping file deletion: path outside allowed directories (\(resolvedPath))")
-            return nil
-        }
-
-        // Prevent deletion of directories
-        var isDirectory: ObjCBool = false
-        if fileManager.fileExists(atPath: resolvedPath, isDirectory: &isDirectory) {
-            if isDirectory.boolValue {
-                print("Skipping file deletion: path is a directory (\(resolvedPath))")
-                return nil
-            }
-        }
-
-        return resolvedPath
-    }
-
-    /// Deletes a local file at the given path only if it is safely resolvable and located inside the app sandbox.
-    ///
-    /// The function resolves symlinks and accepts either file URLs (starting with `file://`) or filesystem paths. It will
-    /// only remove the item when the resolved path is inside the app's temporary, caches, or documents directories and the
-    /// path refers to a file (not a directory). If the file does not exist or the path is outside the allowed directories,
-    /// the function does nothing and logs a message. Errors encountered during removal are logged.
-    ///
-    /// Deletes a file at the given path if it passes the plugin's safety checks.
-    ///
-    /// The path is first validated with `isDeletableFile(path:)` (which resolves symlinks, ensures the file is inside the app's temporary, caches, or documents directories, and verifies it is not a directory). If validation succeeds and the file exists, the file is removed. Outcomes and errors are logged but not thrown.
-    /// - Parameter path: The candidate file system path to delete.
-    private func deleteFileIfSafe(path: String) {
-        guard let resolvedPath = isDeletableFile(path: path) else {
-            return
-        }
-
-        let fileManager = FileManager.default
-
-        do {
-            if fileManager.fileExists(atPath: resolvedPath) {
-                try fileManager.removeItem(atPath: resolvedPath)
-                print("Deleted file after playOnce: \(resolvedPath)")
-            } else {
-                print("File does not exist: \(resolvedPath)")
-            }
-        } catch {
-            print("Error deleting file after playOnce: \(error.localizedDescription)")
         }
     }
 

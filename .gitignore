@@ -69,3 +69,7 @@ captures
 example-app/node_modules
 example-app/dist
 package-lock.json
+
+# Development artifacts
+.github/
+.swiftpm/

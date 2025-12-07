@@ -68,3 +68,4 @@ captures
 # Example app build output
 example-app/node_modules
 example-app/dist
+package-lock.json

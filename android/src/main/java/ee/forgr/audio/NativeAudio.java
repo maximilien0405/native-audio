@@ -232,14 +232,6 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         call.resolve();
     }
 
-    /**
-     * Checks whether an audio asset identifier has been preloaded.
-     *
-     * Resolves the provided PluginCall with a JSObject containing the boolean property
-     * `"found"` set to `true` when the given `assetId` is present in the plugin's preload map,
-     * or `false` when it is not present. Rejects the call with `ERROR_AUDIO_ID_MISSING` when
-     * the `assetId` parameter is missing or invalid.
-     */
     @PluginMethod
     public void isPreloaded(final PluginCall call) {
         new Thread(
@@ -262,14 +254,9 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     }
 
     /**
-     * Begin preloading an audio asset specified by the given plugin call.
+     * Initiates preloading of an audio asset described by the plugin call.
      *
-     * <p>The call must include `assetId` and `assetPath`. It may also include `isUrl`, `isComplex`,
-     * `headers`, `volume`, `audioChannelNum`, and optional notification metadata (title, artist,
-     * album, artworkUrl). The preload operation is scheduled on the UI thread and the provided
-     * PluginCall will be resolved on success or rejected with an error.
-     *
-     * @param call the PluginCall containing preload options and metadata for the asset
+     * @param call the PluginCall containing preload options (for example `assetId`, `assetPath`, `isUrl`, `isComplex`, headers, and optional notification metadata); the call will be resolved or rejected when the preload operation completes.
      */
     @PluginMethod
     public void preload(final PluginCall call) {
@@ -308,16 +295,13 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         this.getActivity().runOnUiThread(
             new Runnable() {
                 /**
-                 * Preloads a temporary audio asset, optionally plays it once, and schedules automatic cleanup when playback completes.
+                 * Preloads a temporary audio asset, optionally plays it one time, and schedules automatic cleanup when playback completes.
                  *
-                 * <p>Generates a unique temporary `assetId`, validates options from the current PluginCall (asset path, volume,
-                 * headers, notification metadata, autoPlay, deleteAfterPlay), loads the asset into the plugin's asset map, and
-                 * registers a completion listener that unloads and removes the asset, clears related notification state, and
-                 * optionally deletes the source file if it resides in an application-safe directory. If `autoPlay` is true and
-                 * notifications are enabled, the media notification is updated to reflect playback.
-                 *
-                 * <p>On success the method resolves the PluginCall with an object containing the generated `assetId`. On failure the
-                 * PluginCall is rejected with a descriptive error message.
+                 * <p>The method generates a unique temporary assetId, validates options (path, volume, local/remote, headers),
+                 * loads the asset into the plugin's asset map, registers completion listeners to dispatch the completion event
+                 * and to unload/remove notification metadata and tracking state, and optionally deletes the source file from
+                 * safe application directories after playback. If configured, it also updates the media notification and returns
+                 * the generated `assetId` to the caller.
                  */
                 @Override
                 public void run() {
@@ -386,16 +370,6 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                             // Set up completion listener for automatic cleanup
                             asset.setCompletionListener(
                                 new AudioCompletionListener() {
-                                    /**
-                                     * Handles completion for a play-once asset by dispatching the completion event and performing cleanup.
-                                     *
-                                     * Performs the following observable actions: unloads and removes the completed asset from internal maps,
-                                     * removes play-once and notification metadata tracking, clears the active notification if the asset was
-                                     * the currently playing one, and optionally deletes the asset file after verifying it resides in an
-                                     * application-safe directory and is not a directory.
-                                     *
-                                     * @param completedAssetId the assetId of the asset that finished playback
-                                     */
                                     @Override
                                     public void onCompletion(String completedAssetId) {
                                         // Call the original completion dispatcher first
@@ -873,13 +847,6 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         }
     }
 
-    /**
-     * Notify listeners that playback for the specified asset has completed.
-     *
-     * Emits a "complete" event containing the `assetId`.
-     *
-     * @param assetId the identifier of the asset that finished playback
-     */
     public void dispatchComplete(String assetId) {
         JSObject ret = new JSObject();
         ret.put("assetId", assetId);
@@ -904,22 +871,17 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     }
 
     /**
-     * Create and initialize an AudioAsset for the given identifier and path, supporting remote URLs (including HLS),
-     * file URIs, and assets packaged under the app's public folder.
-     *
-     * <p>If assetPath is a remote HTTP(S) URL, optional HTTP headers from {@code headersObj} are applied.
-     * If the URL ends with {@code .m3u8}, HLS support is required and an exception is thrown if unavailable.
-     * File URIs are opened directly and validated for existence. Paths treated as public assets are resolved
-     * under the app's {@code public/} assets directory.</p>
+     * Create an AudioAsset for the given identifier and path, supporting remote URLs (including HLS),
+     * local file URIs, and assets in the app's public folder.
      *
      * @param assetId         unique identifier for the asset
-     * @param assetPath       file path or URL to the audio resource; for public assets this may be relative (will be resolved under {@code public/})
-     * @param isLocalUrl      true when {@code assetPath} is a URL or file URI (http/https/file); false when it refers to a public asset path
+     * @param assetPath       file path or URL to the audio resource
+     * @param isLocalUrl      true when assetPath is a URL (http/https/file), false when it refers to a public asset path
      * @param volume          initial playback volume (expected range: 0.1 to 1.0)
      * @param audioChannelNum number of audio channels to configure for the asset
-     * @param headersObj      optional map-like object of HTTP headers for remote requests (may be null)
+     * @param headersObj      optional HTTP headers for remote requests (may be null)
      * @return                an initialized AudioAsset instance for the provided path
-     * @throws Exception      if the asset cannot be located or initialized (missing file, unsupported HLS, invalid path, or other load errors)
+     * @throws Exception      if the asset cannot be located or initialized (includes missing file, invalid path, or other load errors)
      */
     private AudioAsset loadAudioAsset(
         String assetId,

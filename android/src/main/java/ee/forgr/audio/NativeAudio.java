@@ -292,9 +292,6 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
      */
     @PluginMethod
     public void playOnce(final PluginCall call) {
-        // Capture plugin reference for use in inner classes
-        final NativeAudio plugin = this;
-
         this.getActivity().runOnUiThread(
             new Runnable() {
                 /**
@@ -309,7 +306,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                 @Override
                 public void run() {
                     try {
-                        plugin.initSoundPool();
+                        NativeAudio.this.initSoundPool();
 
                         // Generate unique temporary asset ID
                         final String assetId =
@@ -317,7 +314,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
                         // Extract options
                         String assetPath = call.getString(ASSET_PATH);
-                        if (!plugin.isStringValid(assetPath)) {
+                        if (!NativeAudio.this.isStringValid(assetPath)) {
                             call.reject(ERROR_ASSET_PATH_MISSING);
                             return;
                         }
@@ -329,7 +326,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                         int audioChannelNum = 1; // Single channel for playOnce
 
                         // Track this as a playOnce asset
-                        plugin.playOnceAssets.add(assetId);
+                        NativeAudio.this.playOnceAssets.add(assetId);
 
                         // Store notification metadata if provided
                         JSObject metadata = call.getObject(NOTIFICATION_METADATA);
@@ -340,27 +337,34 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                             if (metadata.has("album")) metadataMap.put("album", metadata.getString("album"));
                             if (metadata.has("artworkUrl")) metadataMap.put("artworkUrl", metadata.getString("artworkUrl"));
                             if (!metadataMap.isEmpty()) {
-                                plugin.notificationMetadataMap.put(assetId, metadataMap);
+                                NativeAudio.this.notificationMetadataMap.put(assetId, metadataMap);
                             }
                         }
 
                         // Preload the asset using the helper method
                         try {
                             // Check if asset already exists
-                            if (plugin.audioAssetList.containsKey(assetId)) {
+                            if (NativeAudio.this.audioAssetList.containsKey(assetId)) {
                                 throw new Exception(ERROR_AUDIO_EXISTS + " - " + assetId);
                             }
 
                             // Load the asset using the helper method
                             JSObject headersObj = call.getObject("headers");
-                            AudioAsset asset = plugin.loadAudioAsset(assetId, assetPath, isLocalUrl, volume, audioChannelNum, headersObj);
+                            AudioAsset asset = NativeAudio.this.loadAudioAsset(
+                                assetId,
+                                assetPath,
+                                isLocalUrl,
+                                volume,
+                                audioChannelNum,
+                                headersObj
+                            );
 
                             if (asset == null) {
                                 throw new Exception("Failed to load asset");
                             }
 
                             // Add to asset list; completion listener is set below with cleanup
-                            plugin.audioAssetList.put(assetId, asset);
+                            NativeAudio.this.audioAssetList.put(assetId, asset);
 
                             // Store the file path if we need to delete it later
                             final String filePathToDelete;
@@ -376,54 +380,48 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                                     @Override
                                     public void onCompletion(String completedAssetId) {
                                         // Call the original completion dispatcher first
-                                        plugin.dispatchComplete(completedAssetId);
+                                        NativeAudio.this.dispatchComplete(completedAssetId);
 
                                         // Then perform cleanup
-                                        plugin
-                                            .getActivity()
-                                            .runOnUiThread(
-                                                new Runnable() {
-                                                    @Override
-                                                    public void run() {
-                                                        try {
-                                                            // Unload the asset
-                                                            AudioAsset assetToUnload = plugin.audioAssetList.get(assetId);
-                                                            if (assetToUnload != null) {
-                                                                assetToUnload.unload();
-                                                                plugin.audioAssetList.remove(assetId);
-                                                            }
-
-                                                            // Remove from tracking sets
-                                                            plugin.playOnceAssets.remove(assetId);
-                                                            plugin.notificationMetadataMap.remove(assetId);
-
-                                                            // Clear notification if this was the currently playing asset
-                                                            if (assetId.equals(plugin.currentlyPlayingAssetId)) {
-                                                                plugin.clearNotification();
-                                                                plugin.currentlyPlayingAssetId = null;
-                                                            }
-
-                                                            // Delete file if requested
-                                                            if (filePathToDelete != null) {
-                                                                try {
-                                                                    File fileToDelete = new File(URI.create(filePathToDelete));
-                                                                    if (fileToDelete.exists() && fileToDelete.delete()) {
-                                                                        Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
-                                                                    }
-                                                                } catch (Exception e) {
-                                                                    Log.e(
-                                                                        TAG,
-                                                                        "Error deleting file after playOnce: " + filePathToDelete,
-                                                                        e
-                                                                    );
-                                                                }
-                                                            }
-                                                        } catch (Exception e) {
-                                                            Log.e(TAG, "Error during playOnce cleanup: " + e.getMessage());
+                                        NativeAudio.this.getActivity().runOnUiThread(
+                                            new Runnable() {
+                                                @Override
+                                                public void run() {
+                                                    try {
+                                                        // Unload the asset
+                                                        AudioAsset assetToUnload = NativeAudio.this.audioAssetList.get(assetId);
+                                                        if (assetToUnload != null) {
+                                                            assetToUnload.unload();
+                                                            NativeAudio.this.audioAssetList.remove(assetId);
                                                         }
+
+                                                        // Remove from tracking sets
+                                                        NativeAudio.this.playOnceAssets.remove(assetId);
+                                                        NativeAudio.this.notificationMetadataMap.remove(assetId);
+
+                                                        // Clear notification if this was the currently playing asset
+                                                        if (assetId.equals(NativeAudio.this.currentlyPlayingAssetId)) {
+                                                            NativeAudio.this.clearNotification();
+                                                            NativeAudio.this.currentlyPlayingAssetId = null;
+                                                        }
+
+                                                        // Delete file if requested
+                                                        if (filePathToDelete != null) {
+                                                            try {
+                                                                File fileToDelete = new File(URI.create(filePathToDelete));
+                                                                if (fileToDelete.exists() && fileToDelete.delete()) {
+                                                                    Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
+                                                                }
+                                                            } catch (Exception e) {
+                                                                Log.e(TAG, "Error deleting file after playOnce: " + filePathToDelete, e);
+                                                            }
+                                                        }
+                                                    } catch (Exception e) {
+                                                        Log.e(TAG, "Error during playOnce cleanup: " + e.getMessage());
                                                     }
                                                 }
-                                            );
+                                            }
+                                        );
                                     }
                                 }
                             );
@@ -445,12 +443,12 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                             call.resolve(result);
                         } catch (Exception ex) {
                             // Cleanup on failure
-                            plugin.playOnceAssets.remove(assetId);
-                            plugin.notificationMetadataMap.remove(assetId);
-                            AudioAsset failedAsset = plugin.audioAssetList.get(assetId);
+                            NativeAudio.this.playOnceAssets.remove(assetId);
+                            NativeAudio.this.notificationMetadataMap.remove(assetId);
+                            AudioAsset failedAsset = NativeAudio.this.audioAssetList.get(assetId);
                             if (failedAsset != null) {
                                 failedAsset.unload();
-                                plugin.audioAssetList.remove(assetId);
+                                NativeAudio.this.audioAssetList.remove(assetId);
                             }
                             call.reject("Failed to load asset for playOnce: " + ex.getMessage());
                         }

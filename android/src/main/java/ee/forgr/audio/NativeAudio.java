@@ -345,7 +345,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                         try {
                             // Check if asset already exists
                             if (NativeAudio.this.audioAssetList.containsKey(assetId)) {
-call.reject(ERROR_AUDIO_EXISTS + " - " + assetId);
+                                call.reject(ERROR_AUDIO_EXISTS + " - " + assetId);
                             }
 
                             // Load the asset using the helper method
@@ -359,15 +359,12 @@ call.reject(ERROR_AUDIO_EXISTS + " - " + assetId);
                                 headersObj
                             );
 
-
                             // Add to asset list; completion listener is set below with cleanup
                             NativeAudio.this.audioAssetList.put(assetId, asset);
 
                             // Store the file path if we need to delete it later
-final String filePathToDelete =
-        (deleteAfterPlay && isLocalUrl && assetPath.startsWith("file://"))
-        ? assetPath
-        : null;
+                            // Only delete local file:// URLs, not remote streaming URLs
+                            final String filePathToDelete = (deleteAfterPlay && assetPath.startsWith("file://")) ? assetPath : null;
 
                             // Set up completion listener for automatic cleanup
                             asset.setCompletionListener(

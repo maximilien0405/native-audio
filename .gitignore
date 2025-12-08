@@ -71,5 +71,4 @@ example-app/dist
 package-lock.json
 
 # Development artifacts
-.github/
 .swiftpm/

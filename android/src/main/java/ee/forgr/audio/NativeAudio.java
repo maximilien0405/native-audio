@@ -50,8 +50,11 @@ import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 @UnstableApi
 @CapacitorPlugin(
@@ -84,6 +87,13 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     private static final int NOTIFICATION_ID = 1001;
     private static final String CHANNEL_ID = "native_audio_channel";
 
+    // Track playOnce assets for automatic cleanup
+    private Set<String> playOnceAssets = new HashSet<>();
+
+    /**
+     * Initializes plugin runtime state by obtaining the system {@link AudioManager}, preparing the asset map,
+     * and recording the device's original audio mode without requesting audio focus.
+     */
     @Override
     public void load() {
         super.load();
@@ -243,6 +253,11 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             .start();
     }
 
+    /**
+     * Initiates preloading of an audio asset described by the plugin call.
+     *
+     * @param call the PluginCall containing preload options (for example `assetId`, `assetPath`, `isUrl`, `isComplex`, headers, and optional notification metadata); the call will be resolved or rejected when the preload operation completes.
+     */
     @PluginMethod
     public void preload(final PluginCall call) {
         this.getActivity().runOnUiThread(
@@ -255,6 +270,192 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         );
     }
 
+    /**
+     * Play an audio asset a single time and automatically remove its resources when finished.
+     *
+     * <p>Preloads the specified asset, optionally starts playback immediately, and ensures the
+     * asset is unloaded and any associated notification metadata are cleared after completion or on
+     * error. Supports local file paths and remote URLs, HLS streams when available, custom HTTP
+     * headers for remote requests, and optional deletion of local source files after playback.
+     *
+     * @param call Capacitor PluginCall containing options:
+     * <ul>
+     *   <li><code>assetPath</code> (required): path or URL to the audio file;</li>
+     *   <li><code>volume</code> (optional): playback volume (0.1–1.0), default 1.0;</li>
+     *   <li><code>isUrl</code> (optional): treat <code>assetPath</code> as a URL when true, default false;</li>
+     *   <li><code>autoPlay</code> (optional): start playback immediately when true, default true;</li>
+     *   <li><code>deleteAfterPlay</code> (optional): delete the local file after playback when true, default false;</li>
+     *   <li><code>headers</code> (optional): JS object of HTTP headers for remote requests;</li>
+     *   <li><code>notificationMetadata</code> (optional): object with <code>title</code>, <code>artist</code>,
+     *       <code>album</code>, <code>artworkUrl</code> for notification display.</li>
+     * </ul>
+     */
+    @PluginMethod
+    public void playOnce(final PluginCall call) {
+        this.getActivity().runOnUiThread(
+            new Runnable() {
+                /**
+                 * Preloads a temporary audio asset, optionally plays it one time, and schedules automatic cleanup when playback completes.
+                 *
+                 * <p>The method generates a unique temporary assetId, validates options (path, volume, local/remote, headers),
+                 * loads the asset into the plugin's asset map, registers completion listeners to dispatch the completion event
+                 * and to unload/remove notification metadata and tracking state, and optionally deletes the source file from
+                 * safe application directories after playback. If configured, it also updates the media notification and returns
+                 * the generated `assetId` to the caller.
+                 */
+                @Override
+                public void run() {
+                    try {
+                        NativeAudio.this.initSoundPool();
+
+                        // Generate unique temporary asset ID
+                        final String assetId =
+                            "playOnce_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
+
+                        // Extract options
+                        String assetPath = call.getString("assetPath");
+                        if (!NativeAudio.this.isStringValid(assetPath)) {
+                            call.reject("Asset Path is missing - " + assetPath);
+                            return;
+                        }
+
+                        boolean autoPlay = call.getBoolean("autoPlay", true);
+                        final boolean deleteAfterPlay = call.getBoolean("deleteAfterPlay", false);
+                        float volume = call.getFloat(VOLUME, 1F);
+                        boolean isLocalUrl = call.getBoolean("isUrl", false);
+                        int audioChannelNum = 1; // Single channel for playOnce
+
+                        // Track this as a playOnce asset
+                        NativeAudio.this.playOnceAssets.add(assetId);
+
+                        // Store notification metadata if provided
+                        JSObject metadata = call.getObject(NOTIFICATION_METADATA);
+                        if (metadata != null) {
+                            Map<String, String> metadataMap = new HashMap<>();
+                            if (metadata.has("title")) metadataMap.put("title", metadata.getString("title"));
+                            if (metadata.has("artist")) metadataMap.put("artist", metadata.getString("artist"));
+                            if (metadata.has("album")) metadataMap.put("album", metadata.getString("album"));
+                            if (metadata.has("artworkUrl")) metadataMap.put("artworkUrl", metadata.getString("artworkUrl"));
+                            if (!metadataMap.isEmpty()) {
+                                NativeAudio.this.notificationMetadataMap.put(assetId, metadataMap);
+                            }
+                        }
+
+                        // Preload the asset using the helper method
+                        try {
+                            // Check if asset already exists
+                            if (NativeAudio.this.audioAssetList.containsKey(assetId)) {
+                                call.reject(ERROR_AUDIO_EXISTS + " - " + assetId);
+                            }
+
+                            // Load the asset using the helper method
+                            JSObject headersObj = call.getObject("headers");
+                            AudioAsset asset = NativeAudio.this.loadAudioAsset(
+                                assetId,
+                                assetPath,
+                                isLocalUrl,
+                                volume,
+                                audioChannelNum,
+                                headersObj
+                            );
+
+                            // Add to asset list; completion listener is set below with cleanup
+                            NativeAudio.this.audioAssetList.put(assetId, asset);
+
+                            // Store the file path if we need to delete it later
+                            // Only delete local file:// URLs, not remote streaming URLs
+                            final String filePathToDelete = (deleteAfterPlay && assetPath.startsWith("file://")) ? assetPath : null;
+
+                            // Set up completion listener for automatic cleanup
+                            asset.setCompletionListener(
+                                new AudioCompletionListener() {
+                                    @Override
+                                    public void onCompletion(String completedAssetId) {
+                                        // Call the original completion dispatcher first
+                                        NativeAudio.this.dispatchComplete(completedAssetId);
+
+                                        // Then perform cleanup
+                                        NativeAudio.this.getActivity().runOnUiThread(() -> {
+                                            try {
+                                                // Unload the asset
+                                                AudioAsset assetToUnload = NativeAudio.this.audioAssetList.get(assetId);
+                                                if (assetToUnload != null) {
+                                                    assetToUnload.unload();
+                                                    NativeAudio.this.audioAssetList.remove(assetId);
+                                                }
+
+                                                // Remove from tracking sets
+                                                NativeAudio.this.playOnceAssets.remove(assetId);
+                                                NativeAudio.this.notificationMetadataMap.remove(assetId);
+
+                                                // Clear notification if this was the currently playing asset
+                                                if (assetId.equals(NativeAudio.this.currentlyPlayingAssetId)) {
+                                                    NativeAudio.this.clearNotification();
+                                                    NativeAudio.this.currentlyPlayingAssetId = null;
+                                                }
+
+                                                // Delete file if requested
+                                                if (filePathToDelete != null) {
+                                                    try {
+                                                        File fileToDelete = new File(URI.create(filePathToDelete));
+                                                        if (fileToDelete.exists() && fileToDelete.delete()) {
+                                                            Log.d(TAG, "Deleted file after playOnce: " + filePathToDelete);
+                                                        }
+                                                    } catch (Exception e) {
+                                                        Log.e(TAG, "Error deleting file after playOnce: " + filePathToDelete, e);
+                                                    }
+                                                }
+                                            } catch (Exception e) {
+                                                Log.e(TAG, "Error during playOnce cleanup: " + e.getMessage());
+                                            }
+                                        });
+                                    }
+                                }
+                            );
+
+                            // Auto-play if requested
+                            if (autoPlay) {
+                                asset.play(0.0);
+
+                                // Update notification if enabled
+                                if (showNotification) {
+                                    currentlyPlayingAssetId = assetId;
+                                    updateNotification(assetId);
+                                }
+                            }
+
+                            // Return the generated assetId
+                            JSObject result = new JSObject();
+                            result.put(ASSET_ID, assetId);
+                            call.resolve(result);
+                        } catch (Exception ex) {
+                            // Cleanup on failure
+                            NativeAudio.this.playOnceAssets.remove(assetId);
+                            NativeAudio.this.notificationMetadataMap.remove(assetId);
+                            AudioAsset failedAsset = NativeAudio.this.audioAssetList.get(assetId);
+                            if (failedAsset != null) {
+                                failedAsset.unload();
+                                NativeAudio.this.audioAssetList.remove(assetId);
+                            }
+                            call.reject("Failed to load asset for playOnce: " + ex.getMessage());
+                        }
+                    } catch (Exception ex) {
+                        call.reject(ex.getMessage());
+                    }
+                }
+            }
+        );
+    }
+
+    /**
+     * Starts playback of a preloaded audio asset on the main (UI) thread.
+     *
+     * The PluginCall must include:
+     * - "assetId" (String): identifier of the preloaded asset to play.
+     * - Optional "time" (number): start position in seconds.
+     *
+     * @param call the PluginCall containing playback parameters
+     */
     @PluginMethod
     public void play(final PluginCall call) {
         this.getActivity().runOnUiThread(
@@ -581,6 +782,14 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         notifyListeners("complete", ret);
     }
 
+    /**
+     * Emits a "currentTime" event for the given asset with the playback position rounded to the nearest 0.1 second.
+     *
+     * The emitted event payload contains `assetId` and `currentTime` (in seconds, rounded to the nearest 0.1).
+     *
+     * @param assetId     the identifier of the audio asset
+     * @param currentTime the current playback time in seconds (will be rounded to nearest 0.1)
+     */
     public void notifyCurrentTime(String assetId, double currentTime) {
         // Round to nearest 100ms
         double roundedTime = Math.round(currentTime * 10.0) / 10.0;
@@ -590,6 +799,133 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         notifyListeners("currentTime", ret);
     }
 
+    /**
+     * Create an AudioAsset for the given identifier and path, supporting remote URLs (including HLS),
+     * local file URIs, and assets in the app's public folder.
+     *
+     * @param assetId         unique identifier for the asset
+     * @param assetPath       file path or URL to the audio resource
+     * @param isLocalUrl      true when assetPath is a URL (http/https/file), false when it refers to a public asset path
+     * @param volume          initial playback volume (expected range: 0.1 to 1.0)
+     * @param audioChannelNum number of audio channels to configure for the asset
+     * @param headersObj      optional HTTP headers for remote requests (may be null)
+     * @return                an initialized AudioAsset instance for the provided path
+     * @throws Exception      if the asset cannot be located or initialized (includes missing file, invalid path, or other load errors)
+     */
+    private AudioAsset loadAudioAsset(
+        String assetId,
+        String assetPath,
+        boolean isLocalUrl,
+        float volume,
+        int audioChannelNum,
+        JSObject headersObj
+    ) throws Exception {
+        if (isLocalUrl) {
+            Uri uri = Uri.parse(assetPath);
+            if (uri.getScheme() != null && (uri.getScheme().equals("http") || uri.getScheme().equals("https"))) {
+                // Remote URL
+                Map<String, String> requestHeaders = null;
+                if (headersObj != null) {
+                    requestHeaders = new HashMap<>();
+                    for (Iterator<String> it = headersObj.keys(); it.hasNext(); ) {
+                        String key = it.next();
+                        try {
+                            String value = headersObj.getString(key);
+                            if (value != null) {
+                                requestHeaders.put(key, value);
+                            }
+                        } catch (Exception e) {
+                            Log.w("AudioPlugin", "Skipping non-string header: " + key);
+                        }
+                    }
+                }
+
+                if (assetPath.endsWith(".m3u8")) {
+                    // HLS Stream - check if HLS support is available
+                    if (!HlsAvailabilityChecker.isHlsAvailable()) {
+                        throw new Exception(
+                            "HLS streaming (.m3u8) is not available. " + "Set 'hls: true' in capacitor.config.ts and run 'npx cap sync'."
+                        );
+                    }
+                    AudioAsset streamAudioAsset = createStreamAudioAsset(assetId, uri, volume, requestHeaders);
+                    if (streamAudioAsset == null) {
+                        throw new Exception("Failed to create HLS stream player. HLS may not be configured.");
+                    }
+                    return streamAudioAsset;
+                } else {
+                    RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(this, assetId, uri, audioChannelNum, volume, requestHeaders);
+                    return remoteAudioAsset;
+                }
+            } else if (uri.getScheme() != null && uri.getScheme().equals("file")) {
+                File file = new File(uri.getPath());
+                if (!file.exists()) {
+                    throw new Exception(ERROR_ASSET_PATH_MISSING + " - " + assetPath);
+                }
+                ParcelFileDescriptor pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+                AssetFileDescriptor afd = new AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH);
+                AudioAsset asset = new AudioAsset(this, assetId, afd, audioChannelNum, volume);
+                return asset;
+            } else {
+                // Handle unexpected URI schemes by attempting to treat as local file
+                try {
+                    File file = new File(uri.getPath());
+                    if (!file.exists()) {
+                        throw new Exception(ERROR_ASSET_PATH_MISSING + " - " + assetPath);
+                    }
+                    ParcelFileDescriptor pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+                    AssetFileDescriptor afd = new AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH);
+                    AudioAsset asset = new AudioAsset(this, assetId, afd, audioChannelNum, volume);
+                    Log.w(TAG, "Unexpected URI scheme '" + uri.getScheme() + "' treated as local file: " + assetPath);
+                    return asset;
+                } catch (Exception e) {
+                    throw new Exception(
+                        "Failed to load asset with unexpected URI scheme '" +
+                            uri.getScheme() +
+                            "' (expected 'http', 'https', or 'file'). Asset path: " +
+                            assetPath +
+                            ". Error: " +
+                            e.getMessage()
+                    );
+                }
+            }
+        } else {
+            // Handle asset in public folder
+            String finalAssetPath = assetPath;
+            if (!assetPath.startsWith("public/")) {
+                finalAssetPath = "public/" + assetPath;
+            }
+            Context ctx = getContext().getApplicationContext();
+            AssetManager am = ctx.getResources().getAssets();
+            AssetFileDescriptor assetFileDescriptor = am.openFd(finalAssetPath);
+            AudioAsset asset = new AudioAsset(this, assetId, assetFileDescriptor, audioChannelNum, volume);
+            return asset;
+        }
+    }
+
+    /**
+     * Preloads an audio asset into the plugin's asset list.
+     *
+     * <p>The provided PluginCall must include:
+     * <ul>
+     *   <li>`assetId` (string) — identifier for the asset</li>
+     *   <li>`assetPath` (string) — path or URL to the audio resource</li>
+     * </ul>
+     * Optional keys on the call:
+     * <ul>
+     *   <li>`isUrl` (boolean) — true when `assetPath` is a remote URL</li>
+     *   <li>`isComplex` (boolean) — when true, `volume` and `audioChannelNum` may be provided</li>
+     *   <li>`volume` (number) — initial playback volume (default 1.0)</li>
+     *   <li>`audioChannelNum` (int) — audio channel count (default 1)</li>
+     *   <li>`headers` (object) — HTTP headers for remote requests</li>
+     *   <li>`notificationMetadata` (object) — optional metadata (`title`, `artist`, `album`, `artworkUrl`) to attach to the asset</li>
+     * </ul>
+     *
+     * <p>On success the call is resolved with a status indicating success. The method rejects the call
+     * when required parameters are missing, when an asset with the same id already exists, or when
+     * the asset cannot be loaded.
+     *
+     * @param call the PluginCall containing asset parameters and options
+     */
     private void preloadAsset(PluginCall call) {
         float volume = 1F;
         int audioChannelNum = 1;
@@ -639,105 +975,19 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                 }
             }
 
-            if (isLocalUrl) {
-                try {
-                    Uri uri = Uri.parse(assetPath);
-                    if (uri.getScheme() != null && (uri.getScheme().equals("http") || uri.getScheme().equals("https"))) {
-                        // Remote URL
-                        Log.d("AudioPlugin", "Debug: Remote URL detected: " + uri.toString());
+            // Use the helper method to load the asset
+            JSObject headersObj = call.getObject("headers");
+            AudioAsset asset = loadAudioAsset(audioId, assetPath, isLocalUrl, volume, audioChannelNum, headersObj);
 
-                        // Extract headers if provided
-                        Map<String, String> requestHeaders = null;
-                        JSObject headersObj = call.getObject("headers");
-                        if (headersObj != null) {
-                            requestHeaders = new HashMap<>();
-                            for (Iterator<String> it = headersObj.keys(); it.hasNext(); ) {
-                                String key = it.next();
-                                try {
-                                    String value = headersObj.getString(key);
-                                    if (value != null) {
-                                        requestHeaders.put(key, value);
-                                    }
-                                } catch (Exception e) {
-                                    Log.w("AudioPlugin", "Skipping non-string header: " + key);
-                                }
-                            }
-                        }
-
-                        if (assetPath.endsWith(".m3u8")) {
-                            // HLS Stream - check if HLS support is available
-                            if (!HlsAvailabilityChecker.isHlsAvailable()) {
-                                call.reject(
-                                    "HLS streaming (.m3u8) is not available. " +
-                                        "The media3-exoplayer-hls dependency is not included. " +
-                                        "To enable HLS support, set 'hls: true' in capacitor.config.ts under NativeAudio plugin config " +
-                                        "and run 'npx cap sync'. This will increase APK size by ~4MB."
-                                );
-                                return;
-                            }
-                            // HLS Stream - create via reflection to allow compile-time exclusion
-                            AudioAsset streamAudioAsset = createStreamAudioAsset(audioId, uri, volume, requestHeaders);
-                            if (streamAudioAsset == null) {
-                                call.reject("Failed to create HLS stream player. HLS support may not be properly configured.");
-                                return;
-                            }
-                            audioAssetList.put(audioId, streamAudioAsset);
-                            call.resolve(status);
-                        } else {
-                            // Regular remote audio
-                            RemoteAudioAsset remoteAudioAsset = new RemoteAudioAsset(
-                                this,
-                                audioId,
-                                uri,
-                                audioChannelNum,
-                                volume,
-                                requestHeaders
-                            );
-                            remoteAudioAsset.setCompletionListener(this::dispatchComplete);
-                            audioAssetList.put(audioId, remoteAudioAsset);
-                            call.resolve(status);
-                        }
-                    } else if (uri.getScheme() != null && uri.getScheme().equals("file")) {
-                        // Local file URL
-                        Log.d("AudioPlugin", "Debug: Local file URL detected");
-                        File file = new File(uri.getPath());
-                        if (!file.exists()) {
-                            Log.e("AudioPlugin", "Error: File does not exist - " + file.getAbsolutePath());
-                            call.reject(ERROR_ASSET_PATH_MISSING + " - " + assetPath);
-                            return;
-                        }
-                        ParcelFileDescriptor pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
-                        AssetFileDescriptor afd = new AssetFileDescriptor(pfd, 0, AssetFileDescriptor.UNKNOWN_LENGTH);
-                        AudioAsset asset = new AudioAsset(this, audioId, afd, audioChannelNum, volume);
-                        asset.setCompletionListener(this::dispatchComplete);
-                        audioAssetList.put(audioId, asset);
-                        call.resolve(status);
-                    } else {
-                        throw new IllegalArgumentException("Invalid URL scheme: " + uri.getScheme());
-                    }
-                } catch (Exception e) {
-                    Log.e("AudioPlugin", "Error handling URL", e);
-                    call.reject("Error handling URL: " + e.getMessage());
-                }
-            } else {
-                // Handle asset in public folder
-                Log.d("AudioPlugin", "Debug: Handling asset in public folder");
-                if (!assetPath.startsWith("public/")) {
-                    assetPath = "public/" + assetPath;
-                }
-                try {
-                    Context ctx = getContext().getApplicationContext();
-                    AssetManager am = ctx.getResources().getAssets();
-                    AssetFileDescriptor assetFileDescriptor = am.openFd(assetPath);
-                    AudioAsset asset = new AudioAsset(this, audioId, assetFileDescriptor, audioChannelNum, volume);
-                    asset.setCompletionListener(this::dispatchComplete);
-                    audioAssetList.put(audioId, asset);
-                    call.resolve(status);
-                } catch (IOException e) {
-                    Log.e("AudioPlugin", "Error opening asset: " + assetPath, e);
-                    call.reject(ERROR_ASSET_PATH_MISSING + " - " + assetPath);
-                }
+            if (asset == null) {
+                call.reject("Failed to load asset");
+                return;
             }
+
+            // Set completion listener and add to asset list
+            asset.setCompletionListener(this::dispatchComplete);
+            audioAssetList.put(audioId, asset);
+            call.resolve(status);
         } catch (Exception ex) {
             Log.e("AudioPlugin", "Error in preloadAsset", ex);
             call.reject("Error in preloadAsset: " + ex.getMessage());

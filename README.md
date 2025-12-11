@@ -468,6 +468,45 @@ Load an audio file
 --------------------
 
 
+### playOnce(...)
+
+```typescript
+playOnce(options: PlayOnceOptions) => Promise<PlayOnceResult>
+```
+
+Play an audio file once with automatic cleanup
+
+Method designed for simple, single-shot audio playback,
+such as notification sounds, UI feedback, or other short audio clips
+that don't require manual state management.
+
+**Key Features:**
+- **Fire-and-forget**: No need to manually preload, play, stop, or unload
+- **Auto-cleanup**: Asset is automatically unloaded after playback completes
+- **Optional file deletion**: Can delete local files after playback (useful for temp files)
+- **Returns assetId**: Can still control playback if needed (pause, stop, etc.)
+
+**Use Cases:**
+- Notification sounds
+- UI sound effects (button clicks, alerts)
+- Short audio clips that play once
+- Temporary audio files that should be cleaned up
+
+**Comparison with regular play():**
+- `play()`: Requires manual preload, play, and unload steps
+- `playOnce()`: Handles everything automatically with a single call
+
+| Param         | Type                                                        |
+| ------------- | ----------------------------------------------------------- |
+| **`options`** | <code><a href="#playonceoptions">PlayOnceOptions</a></code> |
+
+**Returns:** <code>Promise&lt;<a href="#playonceresult">PlayOnceResult</a>&gt;</code>
+
+**Since:** 7.11.0
+
+--------------------
+
+
 ### isPreloaded(...)
 
 ```typescript
@@ -697,28 +736,6 @@ Check if an audio file is playing
 --------------------
 
 
-### playOnce(...)
-
-```typescript
-playOnce(options: PlayOnceOptions) => Promise<PlayOnceResult>
-```
-
-Play an audio file once with automatic cleanup after completion.
-
-This is a convenience method that combines preload, play, and unload into a single call.
-The audio asset is automatically cleaned up after playback completes or if an error occurs.
-
-| Param         | Type                                                            |
-| ------------- | --------------------------------------------------------------- |
-| **`options`** | <code><a href="#playonceoptions">PlayOnceOptions</a></code> |
-
-**Returns:** <code>Promise&lt;<a href="#playonceresult">PlayOnceResult</a>&gt;</code>
-
-**Since:** 7.11.0
-
---------------------
-
-
 ### addListener('complete', ...)
 
 ```typescript
@@ -847,6 +864,26 @@ behavior details about audio mixing on iOS.
 | **`artworkUrl`** | <code>string</code> | URL or local path to the artwork/album art image      |
 
 
+#### PlayOnceResult
+
+| Prop          | Type                | Description                                                                                                               |
+| ------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **`assetId`** | <code>string</code> | The internally generated asset ID for this playback Can be used to control playback (pause, stop, etc.) before completion |
+
+
+#### PlayOnceOptions
+
+| Prop                       | Type                                                                  | Description                                                                                                                                                                                                                                                                                     | Default            | Since  |
+| -------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------ |
+| **`assetPath`**            | <code>string</code>                                                   | Path to the audio file, relative path of the file, absolute url (file://) or remote url (https://) Supported formats: - MP3, WAV (all platforms) - M3U8/HLS streams (iOS and Android)                                                                                                           |                    |        |
+| **`volume`**               | <code>number</code>                                                   | Volume of the audio, between 0.1 and 1.0                                                                                                                                                                                                                                                        | <code>1.0</code>   |        |
+| **`isUrl`**                | <code>boolean</code>                                                  | Is the audio file a URL, pass true if assetPath is a `file://` url or a streaming URL (m3u8)                                                                                                                                                                                                    | <code>false</code> |        |
+| **`autoPlay`**             | <code>boolean</code>                                                  | Automatically start playback after loading                                                                                                                                                                                                                                                      | <code>true</code>  |        |
+| **`deleteAfterPlay`**      | <code>boolean</code>                                                  | Delete the audio file from disk after playback completes Only works for local files (file:// URLs), ignored for remote URLs                                                                                                                                                                     | <code>false</code> | 7.11.0 |
+| **`notificationMetadata`** | <code><a href="#notificationmetadata">NotificationMetadata</a></code> | Metadata to display in the notification center when audio is playing. Only used when `showNotification: true` is set in `configure()`. See {@link <a href="#configureoptions">ConfigureOptions.showNotification</a>} for important details about how this affects audio mixing behavior on iOS. |                    | 7.10.0 |
+| **`headers`**              | <code><a href="#record">Record</a>&lt;string, string&gt;</code>       | Custom HTTP headers to include when fetching remote audio files. Only used when isUrl is true and assetPath is a remote URL (http/https). Example: { 'x-api-key': 'abc123', 'Authorization': 'Bearer token' }                                                                                   |                    | 7.10.0 |
+
+
 #### Assets
 
 | Prop          | Type                | Description                             |
@@ -876,26 +913,6 @@ behavior details about audio mixing on iOS.
 | **`assetId`**     | <code>string</code> | Asset Id of the audio                | 6.5.0 |
 
 
-#### PlayOnceOptions
-
-| Prop                       | Type                                | Description                                                                                                                                                                                                                                                                                         | Default            | Since  |
-| -------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------ |
-| **`assetPath`**            | <code>string</code>                 | Path to the audio file (local or remote URL)                                                                                                                                                                                                                                                       |                    | 7.11.0 |
-| **`volume`**               | <code>number</code>                 | Volume level (0.1 to 1.0)                                                                                                                                                                                                                                                                           | <code>1.0</code>   | 7.11.0 |
-| **`isUrl`**                | <code>boolean</code>                | Whether assetPath is a URL (true) or local path (false)                                                                                                                                                                                                                                             | <code>false</code> | 7.11.0 |
-| **`autoPlay`**             | <code>boolean</code>                | Start playback immediately after loading                                                                                                                                                                                                                                                            | <code>true</code>  | 7.11.0 |
-| **`deleteAfterPlay`**      | <code>boolean</code>                 | Delete the audio file from disk after playback completes. Only works for local files (file:// URLs), ignored for remote URLs                                                                                                                                                                                    | <code>false</code> | 7.11.0 |
-| **`headers`**              | <code>Record&lt;string, string&gt;</code> | Optional HTTP headers for remote URL requests                                                                                                                                                                                                                                                       |                    | 7.11.0 |
-| **`notificationMetadata`** | <code><a href="#notificationmetadata">NotificationMetadata</a></code>    | Optional metadata for media notification display                                                                                                                                                                                                                                                    |                    | 7.11.0 |
-
-
-#### PlayOnceResult
-
-| Prop          | Type                | Description                                | Since  |
-| ------------- | ------------------- | ------------------------------------------ | ------ |
-| **`assetId`** | <code>string</code> | Generated asset ID for the loaded audio | 7.11.0 |
-
-
 ### Type Aliases
 
 
@@ -903,9 +920,7 @@ behavior details about audio mixing on iOS.
 
 Construct a type with a set of properties K of type T
 
-<code>{
- [P in K]: T;
- }</code>
+<code>{ [P in K]: T; }</code>
 
 
 #### CompletedListener

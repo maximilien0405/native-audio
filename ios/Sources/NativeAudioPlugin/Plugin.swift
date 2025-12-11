@@ -437,7 +437,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                     } else {
                         resolvedPath = filePath
                     }
-                    
+
                     do {
                         if fileManager.fileExists(atPath: resolvedPath) {
                             try fileManager.removeItem(atPath: resolvedPath)

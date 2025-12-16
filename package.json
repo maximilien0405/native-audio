@@ -25,6 +25,7 @@
   "bugs": {
     "url": "https://github.com/Cap-go/capacitor-native-audio/native-audio/issues"
   },
+  "homepage": "https://capgo.app/docs/plugins/native-audio/",
   "keywords": [
     "capacitor",
     "plugin",

@@ -41,9 +41,7 @@ public class AudioDispatcher
                 .build()
         );
         mediaPlayer.setVolume(volume, volume);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            mediaPlayer.setPlaybackParams(mediaPlayer.getPlaybackParams().setSpeed(1.0f));
-        }
+        mediaPlayer.setPlaybackParams(mediaPlayer.getPlaybackParams().setSpeed(1.0f));
         mediaPlayer.prepare();
     }
 
@@ -96,9 +94,6 @@ public class AudioDispatcher
     }
 
     public void setRate(float rate) throws Exception {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return;
-        }
         mediaPlayer.setPlaybackParams(mediaPlayer.getPlaybackParams().setSpeed(rate));
     }
 

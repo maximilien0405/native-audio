@@ -1,11 +1,9 @@
 package ee.forgr.audio;
 
 import android.content.res.AssetFileDescriptor;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
-import androidx.annotation.RequiresApi;
 import java.util.ArrayList;
 
 public class AudioAsset {
@@ -168,7 +166,6 @@ public class AudioAsset {
         }
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.M)
     public void setRate(float rate) throws Exception {
         for (int x = 0; x < audioList.size(); x++) {
             AudioDispatcher audio = audioList.get(x);

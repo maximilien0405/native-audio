@@ -691,7 +691,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
             if (audioAssetList.containsKey(audioId)) {
                 AudioAsset asset = audioAssetList.get(audioId);
-                if (asset != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (asset != null) {
                     asset.setRate(rate);
                 }
                 call.resolve();

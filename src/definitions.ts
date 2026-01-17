@@ -91,6 +91,38 @@ export interface ConfigureOptions {
    * @see https://github.com/Cap-go/capacitor-native-audio/issues/202
    */
   showNotification?: boolean;
+  /**
+   * Enable background audio playback (Android only)
+   *
+   * When enabled, audio will continue playing when the app is backgrounded or the screen is locked.
+   * The plugin will skip the automatic pause/resume logic that normally occurs when the app
+   * enters the background or returns to the foreground.
+   *
+   * **Important Android Requirements:**
+   * To use background playback on Android, your app must:
+   * 1. Declare the required permissions in `AndroidManifest.xml`:
+   *    - `<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />`
+   *    - `<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />`
+   *    - `<uses-permission android:name="android.permission.WAKE_LOCK" />`
+   * 2. Start a Foreground Service with a media-style notification before backgrounding
+   *    (the plugin does not automatically create or manage the foreground service)
+   * 3. Use `showNotification: true` to display playback controls in the notification
+   *
+   * **Usage Example:**
+   * ```typescript
+   * await NativeAudio.configure({
+   *   backgroundPlayback: true,
+   *   showNotification: true
+   * });
+   * // Start your foreground service here
+   * // Then preload and play audio as normal
+   * ```
+   *
+   * @default false
+   * @platform Android
+   * @since 8.2.0
+   */
+  backgroundPlayback?: boolean;
 }
 
 /**

@@ -90,6 +90,9 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     // Track playOnce assets for automatic cleanup
     private Set<String> playOnceAssets = new HashSet<>();
 
+    // Background playback support
+    private boolean backgroundPlayback = false;
+
     /**
      * Initializes plugin runtime state by obtaining the system {@link AudioManager}, preparing the asset map,
      * and recording the device's original audio mode without requesting audio focus.
@@ -143,6 +146,12 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     protected void handleOnPause() {
         super.handleOnPause();
 
+        // Skip automatic pause when background playback is enabled
+        if (backgroundPlayback) {
+            Log.d(TAG, "Background playback enabled - skipping automatic pause");
+            return;
+        }
+
         try {
             if (audioAssetList != null) {
                 for (HashMap.Entry<String, AudioAsset> entry : audioAssetList.entrySet()) {
@@ -165,6 +174,12 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     @Override
     protected void handleOnResume() {
         super.handleOnResume();
+
+        // Skip automatic resume when background playback is enabled
+        if (backgroundPlayback) {
+            Log.d(TAG, "Background playback enabled - skipping automatic resume");
+            return;
+        }
 
         try {
             if (resumeList != null) {
@@ -199,6 +214,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         boolean background = call.getBoolean("background", false);
         this.fadeMusic = call.getBoolean("fade", false);
         this.showNotification = call.getBoolean(SHOW_NOTIFICATION, false);
+        this.backgroundPlayback = call.getBoolean("backgroundPlayback", false);
 
         try {
             if (focus) {

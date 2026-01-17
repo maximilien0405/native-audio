@@ -243,6 +243,91 @@ The media control buttons automatically handle:
 - iOS: Uses MPNowPlayingInfoCenter with MPRemoteCommandCenter
 - Android: Uses MediaSession with NotificationCompat.MediaStyle
 
+### Android Background Playback @since 8.2.0
+
+By default, Android apps pause audio when the app is backgrounded or the screen is locked. To enable continuous audio playback in the background (for meditation apps, music players, podcast players, etc.), use the `backgroundPlayback` flag.
+
+> **⚠️ Important Android Requirements**
+> 
+> To use background playback on Android, your app must meet these requirements:
+> 1. Declare the required permissions in `AndroidManifest.xml`
+> 2. Start an Android Foreground Service with a media notification
+> 3. Configure the plugin with `backgroundPlayback: true`
+
+**Step 1: Add required permissions to `AndroidManifest.xml`**
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for background audio playback -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    
+    <application>
+        <!-- Your app configuration -->
+    </application>
+</manifest>
+```
+
+**Step 2: Configure the plugin with background playback enabled**
+
+```typescript
+import { NativeAudio } from '@capgo/native-audio';
+
+// Enable background playback and notification center
+await NativeAudio.configure({
+  backgroundPlayback: true,  // Prevent automatic pause when backgrounded
+  showNotification: true,    // Show playback controls in notification
+  focus: true                // Request audio focus (optional but recommended)
+});
+```
+
+**Step 3: Start a Foreground Service (your responsibility)**
+
+The plugin does NOT automatically create or manage the Android Foreground Service. You must create and start your own foreground service using a Capacitor plugin like [`@capacitor/local-notifications`](https://capacitorjs.com/docs/apis/local-notifications) or a custom Android service.
+
+Here's a conceptual example:
+
+```typescript
+// 1. Configure the audio plugin
+await NativeAudio.configure({
+  backgroundPlayback: true,
+  showNotification: true
+});
+
+// 2. Start your foreground service (implementation depends on your app)
+// This is typically done with a native Android service or a plugin
+// that provides foreground service capabilities
+await startForegroundService();
+
+// 3. Preload and play audio as normal
+await NativeAudio.preload({
+  assetId: 'meditation',
+  assetPath: 'audio/meditation.mp3',
+  notificationMetadata: {
+    title: 'Meditation Session',
+    artist: 'Your App Name'
+  }
+});
+
+await NativeAudio.play({ assetId: 'meditation' });
+
+// Audio will continue playing when app is backgrounded
+```
+
+**How it works:**
+- Without `backgroundPlayback: true`: The plugin automatically pauses all audio when the app enters the background
+- With `backgroundPlayback: true`: The plugin skips automatic pause/resume, allowing continuous playback
+
+**Important notes:**
+- This flag is **Android-only** (iOS already supports background playback via AVAudioSession)
+- You **must** start an Android Foreground Service separately (plugin does not handle this)
+- Combine with `showNotification: true` to display playback controls
+- Starting Android 14+, foreground services require the `FOREGROUND_SERVICE_MEDIA_PLAYBACK` permission type
+
+**Alternative approach:**
+If you need a complete solution including foreground service management, consider using a dedicated media playback plugin or implementing a custom Android service in your app's native code.
+
 ## Play Once (Fire-and-Forget) @since 7.11.0
 
 For simple one-shot audio playback (sound effects, notifications, etc.), use `playOnce()` which handles the entire asset lifecycle automatically:

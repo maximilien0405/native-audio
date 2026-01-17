@@ -313,7 +313,13 @@ await NativeAudio.preload({
 await NativeAudio.play({ assetId: 'meditation' });
 
 // Audio will continue playing when app is backgrounded
+// The foreground service ensures Android allows background playback
 ```
+
+**Important timing notes:**
+- The foreground service should be started **before** the app enters the background
+- Start the service immediately after configuring the audio plugin and before playing audio
+- If the foreground service is not running, Android may still kill your audio playback
 
 **How it works:**
 - Without `backgroundPlayback: true`: The plugin automatically pauses all audio when the app enters the background

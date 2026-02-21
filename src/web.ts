@@ -1,41 +1,73 @@
 import { WebPlugin } from '@capacitor/core';
 
 import { AudioAsset } from './audio-asset';
-import type { ConfigureOptions, PlayOnceOptions, PlayOnceResult, PreloadOptions } from './definitions';
+import type {
+  Assets,
+  AssetPauseOptions,
+  AssetPlayOptions,
+  AssetRate,
+  AssetResumeOptions,
+  AssetSetTime,
+  AssetStopOptions,
+  AssetVolume,
+  ConfigureOptions,
+  PlayOnceOptions,
+  PlayOnceResult,
+  PreloadOptions,
+} from './definitions';
 import { NativeAudio } from './definitions';
 
 export class NativeAudioWeb extends WebPlugin implements NativeAudio {
+  private static readonly LOG_TAG: string = '[NativeAudioWeb]';
+  private static readonly DEFAULT_FADE_DURATION_SEC: number = 1;
   private static readonly FILE_LOCATION: string = '';
   private static readonly AUDIO_ASSET_BY_ASSET_ID: Map<string, AudioAsset> = new Map<string, AudioAsset>();
   private static readonly playOnceAssets: Set<string> = new Set<string>();
+  private debugMode = false;
+
   constructor() {
     super();
   }
 
-  async resume(options: { assetId: string }): Promise<void> {
+  async resume(options: AssetResumeOptions): Promise<void> {
     const audio: HTMLAudioElement = this.getAudioAsset(options.assetId).audio;
+    if (options.fadeIn) {
+      const target = audio.volume > 0 ? audio.volume : 1;
+      audio.volume = 0;
+      await audio.play();
+      this.fadeVolume(audio, target, options.fadeInDuration ?? NativeAudioWeb.DEFAULT_FADE_DURATION_SEC);
+      return;
+    }
     if (audio.paused) {
       return audio.play();
     }
   }
 
-  async pause(options: { assetId: string }): Promise<void> {
+  async pause(options: AssetPauseOptions): Promise<void> {
     const audio: HTMLAudioElement = this.getAudioAsset(options.assetId).audio;
+    if (options.fadeOut) {
+      const target = audio.volume;
+      this.fadeVolume(audio, 0, options.fadeOutDuration ?? NativeAudioWeb.DEFAULT_FADE_DURATION_SEC, () => {
+        audio.pause();
+        audio.volume = target;
+      });
+      return;
+    }
     return audio.pause();
   }
 
-  async setCurrentTime(options: { assetId: string; time: number }): Promise<void> {
+  async setCurrentTime(options: AssetSetTime): Promise<void> {
     const audio: HTMLAudioElement = this.getAudioAsset(options.assetId).audio;
     audio.currentTime = options.time;
     return;
   }
 
-  async getCurrentTime(options: { assetId: string }): Promise<{ currentTime: number }> {
+  async getCurrentTime(options: Assets): Promise<{ currentTime: number }> {
     const audio: HTMLAudioElement = this.getAudioAsset(options.assetId).audio;
     return { currentTime: audio.currentTime };
   }
 
-  async getDuration(options: { assetId: string }): Promise<{ duration: number }> {
+  async getDuration(options: Assets): Promise<{ duration: number }> {
     const audio: HTMLAudioElement = this.getAudioAsset(options.assetId).audio;
     if (Number.isNaN(audio.duration)) {
       throw 'no duration available';
@@ -44,6 +76,13 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
       throw 'duration not available => media resource is streaming';
     }
     return { duration: audio.duration };
+  }
+
+  async setDebugMode(options: { enabled: boolean }): Promise<void> {
+    this.debugMode = options.enabled;
+    if (this.debugMode) {
+      this.logInfo('Debug mode enabled');
+    }
   }
 
   async configure(options: ConfigureOptions): Promise<void> {
@@ -149,47 +188,90 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
     this.notifyListeners('complete', { assetId });
   }
 
-  async play(options: { assetId: string; time?: number }): Promise<void> {
-    const { assetId, time = 0 } = options;
+  async play(options: AssetPlayOptions): Promise<void> {
+    const { assetId, time = 0, delay = 0 } = options;
     const audio = this.getAudioAsset(assetId).audio;
+    if (delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay * 1000));
+    }
     await this.stop(options);
     audio.loop = false;
     audio.currentTime = time;
+    if (typeof options.volume === 'number') {
+      audio.volume = options.volume;
+    }
     audio.addEventListener('ended', () => this.onEnded(assetId), {
       once: true,
     });
-    return audio.play();
+    if (options.fadeIn) {
+      const targetVolume = typeof options.volume === 'number' ? options.volume : 1;
+      audio.volume = 0;
+      await audio.play();
+      this.fadeVolume(audio, targetVolume, options.fadeInDuration ?? NativeAudioWeb.DEFAULT_FADE_DURATION_SEC);
+    } else {
+      await audio.play();
+    }
+
+    if (options.fadeOut) {
+      const fadeOutDuration = options.fadeOutDuration ?? NativeAudioWeb.DEFAULT_FADE_DURATION_SEC;
+      const startAt =
+        typeof options.fadeOutStartTime === 'number'
+          ? options.fadeOutStartTime
+          : Number.isFinite(audio.duration)
+            ? Math.max(0, audio.duration - fadeOutDuration)
+            : -1;
+      if (startAt >= 0) {
+        const msUntilFade = Math.max(0, (startAt - time) * 1000);
+        setTimeout(() => {
+          this.fadeVolume(audio, 0, fadeOutDuration);
+        }, msUntilFade);
+      }
+    }
   }
 
-  async loop(options: { assetId: string }): Promise<void> {
+  async loop(options: Assets): Promise<void> {
     const audio: HTMLAudioElement = this.getAudioAsset(options.assetId).audio;
     await this.stop(options);
     audio.loop = true;
     return audio.play();
   }
 
-  async stop(options: { assetId: string }): Promise<void> {
+  async stop(options: AssetStopOptions): Promise<void> {
     const audio: HTMLAudioElement = this.getAudioAsset(options.assetId).audio;
+    if (options.fadeOut && !audio.paused) {
+      const target = audio.volume;
+      this.fadeVolume(audio, 0, options.fadeOutDuration ?? NativeAudioWeb.DEFAULT_FADE_DURATION_SEC, () => {
+        audio.pause();
+        audio.loop = false;
+        audio.currentTime = 0;
+        audio.volume = target;
+      });
+      return;
+    }
     audio.pause();
     audio.loop = false;
     audio.currentTime = 0;
   }
 
-  async unload(options: { assetId: string }): Promise<void> {
+  async unload(options: Assets): Promise<void> {
     await this.stop(options);
     NativeAudioWeb.AUDIO_ASSET_BY_ASSET_ID.delete(options.assetId);
   }
 
-  async setVolume(options: { assetId: string; volume: number }): Promise<void> {
+  async setVolume(options: AssetVolume): Promise<void> {
     if (typeof options?.volume !== 'number') {
       throw 'no volume provided';
     }
 
     const audio: HTMLAudioElement = this.getAudioAsset(options.assetId).audio;
+    if (options.duration && options.duration > 0) {
+      this.fadeVolume(audio, options.volume, options.duration);
+      return;
+    }
     audio.volume = options.volume;
   }
 
-  async setRate(options: { assetId: string; rate: number }): Promise<void> {
+  async setRate(options: AssetRate): Promise<void> {
     if (typeof options?.rate !== 'number') {
       throw 'no rate provided';
     }
@@ -198,14 +280,35 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
     audio.playbackRate = options.rate;
   }
 
-  async isPlaying(options: { assetId: string }): Promise<{ isPlaying: boolean }> {
+  async isPlaying(options: Assets): Promise<{ isPlaying: boolean }> {
     const audio: HTMLAudioElement = this.getAudioAsset(options.assetId).audio;
     return { isPlaying: !audio.paused };
   }
 
   async clearCache(): Promise<void> {
-    // Web audio doesn't have a persistent cache to clear
+    this.logWarning('clearCache is not supported for web. No cache to clear.');
     return;
+  }
+
+  private fadeVolume(audio: HTMLAudioElement, to: number, durationSec: number, onDone?: () => void): void {
+    const from = audio.volume;
+    if (durationSec <= 0) {
+      audio.volume = Math.max(0, Math.min(1, to));
+      onDone?.();
+      return;
+    }
+    const intervalMs = 50;
+    const steps = Math.max(1, Math.round((durationSec * 1000) / intervalMs));
+    let step = 0;
+    const timer = setInterval(() => {
+      step++;
+      const progress = step / steps;
+      audio.volume = Math.max(0, Math.min(1, from + (to - from) * progress));
+      if (step >= steps) {
+        clearInterval(timer);
+        onDone?.();
+      }
+    }, intervalMs);
   }
 
   private getAudioAsset(assetId: string): AudioAsset {
@@ -226,6 +329,16 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
     if (!assetId?.length) {
       throw 'no assetId provided';
     }
+  }
+
+  private logWarning(message: string): void {
+    if (!this.debugMode) return;
+    console.warn(`${NativeAudioWeb.LOG_TAG} Warning: ${message}`);
+  }
+
+  private logInfo(message: string): void {
+    if (!this.debugMode) return;
+    console.info(`${NativeAudioWeb.LOG_TAG} Info: ${message}`);
   }
 
   async getPluginVersion(): Promise<{ version: string }> {

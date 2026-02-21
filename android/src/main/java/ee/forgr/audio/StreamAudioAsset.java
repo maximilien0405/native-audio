@@ -68,7 +68,7 @@ public class StreamAudioAsset extends AudioAsset {
     }
 
     private void initializePlayer() {
-        Log.d(TAG, "Initializing stream player with volume: " + volume);
+        logger.debug("Initializing stream player with volume: " + volume);
 
         // Configure HLS source with better settings for live streaming
         DefaultHttpDataSource.Factory httpDataSourceFactory = new DefaultHttpDataSource.Factory()
@@ -95,7 +95,7 @@ public class StreamAudioAsset extends AudioAsset {
             new Player.Listener() {
                 @Override
                 public void onPlaybackStateChanged(int state) {
-                    Log.d(TAG, "Stream state changed to: " + getStateString(state));
+                    logger.debug("Stream state changed to: " + getStateString(state));
                     if (state == Player.STATE_READY && !isPrepared) {
                         isPrepared = true;
                         if (player.isCurrentMediaItemLive()) {
@@ -106,17 +106,17 @@ public class StreamAudioAsset extends AudioAsset {
 
                 @Override
                 public void onIsLoadingChanged(boolean isLoading) {
-                    Log.d(TAG, "Loading state changed: " + isLoading);
+                    logger.debug("Loading state changed: " + isLoading);
                 }
 
                 @Override
                 public void onIsPlayingChanged(boolean isPlaying) {
-                    Log.d(TAG, "Playing state changed: " + isPlaying);
+                    logger.debug("Playing state changed: " + isPlaying);
                 }
 
                 @Override
                 public void onPlayerError(PlaybackException error) {
-                    Log.e(TAG, "Player error: " + error.getMessage());
+                    logger.error("Player error: " + error.getMessage());
                     isPrepared = false;
                     // Try to recover by recreating the player
                     owner
@@ -146,8 +146,8 @@ public class StreamAudioAsset extends AudioAsset {
     }
 
     @Override
-    public void play(Double time) throws Exception {
-        Log.d(TAG, "Play called with time: " + time + ", isPrepared: " + isPrepared);
+    public void play(double time, float volume) throws Exception {
+        logger.debug("Play called with time: " + time + ", isPrepared: " + isPrepared);
         owner
             .getActivity()
             .runOnUiThread(() -> {
@@ -157,23 +157,24 @@ public class StreamAudioAsset extends AudioAsset {
                         new Player.Listener() {
                             @Override
                             public void onPlaybackStateChanged(int state) {
-                                Log.d(TAG, "Play-wait state changed to: " + getStateString(state));
+                                logger.debug("Play-wait state changed to: " + getStateString(state));
                                 if (state == Player.STATE_READY) {
-                                    startPlayback(time);
+                                    startPlayback(time, volume);
+                                    startCurrentTimeUpdates();
                                     player.removeListener(this);
                                 }
                             }
                         }
                     );
                 } else {
-                    startPlayback(time);
+                    startPlayback(time, volume);
                 }
             });
     }
 
-    private void startPlayback(Double time) {
-        Log.d(TAG, "Starting playback with time: " + time);
-        if (time != null) {
+    private void startPlayback(double time, float volume) {
+        logger.debug("Starting playback with time: " + time);
+        if (time != 0) {
             player.seekTo(Math.round(time * 1000));
         } else if (player.isCurrentMediaItemLive()) {
             player.seekToDefaultPosition();
@@ -181,6 +182,7 @@ public class StreamAudioAsset extends AudioAsset {
         player.setPlaybackParameters(new PlaybackParameters(1.0f));
         player.setVolume(volume);
         player.setPlayWhenReady(true);
+        startCurrentTimeUpdates();
     }
 
     @Override
@@ -189,8 +191,10 @@ public class StreamAudioAsset extends AudioAsset {
         owner
             .getActivity()
             .runOnUiThread(() -> {
-                if (player.isPlaying()) {
+                cancelFade();
+                if (player != null && player.isPlaying()) {
                     player.setPlayWhenReady(false);
+                    stopCurrentTimeUpdates();
                     wasPlaying[0] = true;
                 }
             });
@@ -203,6 +207,7 @@ public class StreamAudioAsset extends AudioAsset {
             .getActivity()
             .runOnUiThread(() -> {
                 player.setPlayWhenReady(true);
+                startCurrentTimeUpdates();
             });
     }
 
@@ -211,6 +216,7 @@ public class StreamAudioAsset extends AudioAsset {
         owner
             .getActivity()
             .runOnUiThread(() -> {
+                cancelFade();
                 // First stop playback
                 player.stop();
                 // Reset player state
@@ -243,7 +249,7 @@ public class StreamAudioAsset extends AudioAsset {
                     new Player.Listener() {
                         @Override
                         public void onPlaybackStateChanged(int state) {
-                            Log.d(TAG, "Stop-reinit state changed to: " + getStateString(state));
+                            logger.debug("Stop-reinit state changed to: " + getStateString(state));
                             if (state == Player.STATE_READY) {
                                 isPrepared = true;
                                 player.removeListener(this);
@@ -264,6 +270,7 @@ public class StreamAudioAsset extends AudioAsset {
             .runOnUiThread(() -> {
                 player.setRepeatMode(Player.REPEAT_MODE_ONE);
                 player.setPlayWhenReady(true);
+                startCurrentTimeUpdates();
             });
     }
 
@@ -272,22 +279,56 @@ public class StreamAudioAsset extends AudioAsset {
         owner
             .getActivity()
             .runOnUiThread(() -> {
+                cancelFade();
                 player.stop();
                 player.clearMediaItems();
                 player.release();
                 isPrepared = false;
+                close(); // Ensure fadeExecutor is shutdown
             });
     }
 
     @Override
-    public void setVolume(float volume) throws Exception {
+    public void close() {
+        if (fadeExecutor != null && !fadeExecutor.isShutdown()) {
+            fadeExecutor.shutdown();
+        }
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+        try {
+            close();
+        } finally {
+            super.finalize();
+        }
+    }
+
+    @Override
+    public void setVolume(float volume, double duration) throws Exception {
         this.volume = volume;
         owner
             .getActivity()
             .runOnUiThread(() -> {
-                Log.d(TAG, "Setting volume to: " + volume);
-                player.setVolume(volume);
+                cancelFade();
+                try {
+                    if (this.isPlaying() && duration > 0) {
+                        fadeTo(duration, volume);
+                    } else {
+                        player.setVolume(volume);
+                    }
+                } catch (Exception e) {
+                    logger.error("Error setting volume", e);
+                }
             });
+    }
+
+    @Override
+    public float getVolume() throws Exception {
+        if (player != null) {
+            return player.getVolume();
+        }
+        return 0;
     }
 
     @Override
@@ -340,8 +381,8 @@ public class StreamAudioAsset extends AudioAsset {
     }
 
     @Override
-    public void playWithFade(Double time) throws Exception {
-        Log.d(TAG, "PlayWithFade called with time: " + time);
+    public void playWithFadeIn(double time, float volume, double fadeInDurationMs) throws Exception {
+        logger.debug("playWithFadeIn called with time: " + time);
         owner
             .getActivity()
             .runOnUiThread(() -> {
@@ -352,19 +393,19 @@ public class StreamAudioAsset extends AudioAsset {
                             @Override
                             public void onPlaybackStateChanged(int state) {
                                 if (state == Player.STATE_READY) {
-                                    startPlaybackWithFade(time);
+                                    startPlaybackWithFade(time, volume, fadeInDurationMs);
                                     player.removeListener(this);
                                 }
                             }
                         }
                     );
                 } else {
-                    startPlaybackWithFade(time);
+                    startPlaybackWithFade(time, volume, fadeInDurationMs);
                 }
             });
     }
 
-    private void startPlaybackWithFade(Double time) {
+    private void startPlaybackWithFade(Double time, float targetVolume, double fadeInDurationMs) {
         if (!player.isPlayingAd()) {
             // Make sure we're not in an ad
             if (time != null) {
@@ -388,8 +429,9 @@ public class StreamAudioAsset extends AudioAsset {
                             // Start with volume 0
                             player.setVolume(0);
                             player.setPlayWhenReady(true);
+                            startCurrentTimeUpdates();
                             // Start fade after ensuring we're actually playing
-                            checkAndStartFade();
+                            checkAndStartFade(fadeInDurationMs, targetVolume);
                         }
                     }
                 }
@@ -397,7 +439,7 @@ public class StreamAudioAsset extends AudioAsset {
         }
     }
 
-    private void checkAndStartFade() {
+    private void checkAndStartFade(double fadeInDurationMs, float volume) {
         final Handler handler = new Handler(Looper.getMainLooper());
         handler.postDelayed(
             new Runnable() {
@@ -406,7 +448,7 @@ public class StreamAudioAsset extends AudioAsset {
                 @Override
                 public void run() {
                     if (player.isPlaying()) {
-                        fadeIn();
+                        fadeIn(volume);
                     } else if (attempts < 10) {
                         // Try for 5 seconds (10 * 500ms)
                         attempts++;
@@ -418,22 +460,50 @@ public class StreamAudioAsset extends AudioAsset {
         );
     }
 
-    private void fadeIn() {
+    private void fadeIn(float targetVolume) {
         final Handler handler = new Handler(Looper.getMainLooper());
         final Runnable fadeRunnable = new Runnable() {
             float currentVolume = 0;
 
             @Override
             public void run() {
-                if (player != null && player.isPlaying() && currentVolume < volume) {
+                if (player != null && player.isPlaying() && currentVolume < targetVolume) {
                     currentVolume += FADE_STEP;
-                    if (currentVolume > volume) currentVolume = volume;
+                    if (currentVolume > targetVolume) currentVolume = targetVolume;
                     player.setVolume(currentVolume);
                     Log.d(TAG, "Fading in: volume = " + currentVolume);
                     handler.postDelayed(this, FADE_DELAY_MS);
                 }
             }
         };
+        handler.post(fadeRunnable);
+    }
+
+    private void fadeTo(double fadeDurationMs, float targetVolume) {
+        final Handler handler = new Handler(Looper.getMainLooper());
+        final int steps = Math.max(1, (int) (fadeDurationMs / FADE_DELAY_MS));
+        final float startVolume = player.getVolume();
+        final float delta = (targetVolume - startVolume) / steps;
+
+        final Runnable fadeRunnable = new Runnable() {
+            int step = 0;
+
+            @Override
+            public void run() {
+                if (player == null || !player.isPlaying() || step >= steps) {
+                    if (player != null) {
+                        player.setVolume(targetVolume);
+                    }
+                    return;
+                }
+
+                float nextVolume = startVolume + (delta * step);
+                player.setVolume(Math.max(0f, Math.min(1f, nextVolume)));
+                step++;
+                handler.postDelayed(this, FADE_DELAY_MS);
+            }
+        };
+
         handler.post(fadeRunnable);
     }
 
@@ -512,8 +582,84 @@ public class StreamAudioAsset extends AudioAsset {
         owner
             .getActivity()
             .runOnUiThread(() -> {
-                Log.d(TAG, "Setting playback rate to: " + rate);
+                logger.debug("Setting playback rate to: " + rate);
                 player.setPlaybackParameters(new PlaybackParameters(rate));
             });
+    }
+
+    @Override
+    protected void startCurrentTimeUpdates() {
+        logger.debug("Starting timer updates");
+        if (currentTimeHandler == null) {
+            currentTimeHandler = new Handler(Looper.getMainLooper());
+        }
+        // Reset completion status for this assetId
+        dispatchedCompleteMap.put(assetId, false);
+
+        // Wait for player to be truly ready
+        currentTimeHandler.postDelayed(
+            new Runnable() {
+                @Override
+                public void run() {
+                    if (player != null && player.getPlaybackState() == Player.STATE_READY) {
+                        startTimeUpdateLoop();
+                    } else {
+                        // Check again in 100ms
+                        currentTimeHandler.postDelayed(this, 100);
+                    }
+                }
+            },
+            100
+        );
+    }
+
+    private void startTimeUpdateLoop() {
+        currentTimeRunnable = new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    boolean isPaused = false;
+                    if (player != null && player.getPlaybackState() == Player.STATE_READY) {
+                        if (player.isPlaying()) {
+                            double currentTime = player.getCurrentPosition() / 1000.0; // Get time directly
+                            logger.debug("Play timer update: currentTime = " + currentTime);
+                            if (owner != null) owner.notifyCurrentTime(assetId, currentTime);
+                            currentTimeHandler.postDelayed(this, 100);
+                            return;
+                        } else if (!player.getPlayWhenReady()) {
+                            isPaused = true;
+                        }
+                    }
+                    logger.debug("Stopping play timer - not playing or not ready");
+                    stopCurrentTimeUpdates();
+                    if (isPaused) {
+                        logger.verbose("Playback is paused, not dispatching complete");
+                    } else {
+                        logger.verbose("Playback is stopped, dispatching complete");
+                        dispatchComplete();
+                    }
+                } catch (Exception e) {
+                    logger.error("Error getting current time", e);
+                    stopCurrentTimeUpdates();
+                }
+            }
+        };
+        try {
+            if (currentTimeHandler == null) {
+                currentTimeHandler = new Handler(Looper.getMainLooper());
+            }
+            currentTimeHandler.post(currentTimeRunnable);
+        } catch (Exception e) {
+            logger.error("Error starting current time updates", e);
+        }
+    }
+
+    @Override
+    void stopCurrentTimeUpdates() {
+        logger.debug("Stopping play timer updates");
+        if (currentTimeHandler != null) {
+            currentTimeHandler.removeCallbacks(currentTimeRunnable);
+            currentTimeHandler = null;
+        }
     }
 }

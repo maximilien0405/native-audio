@@ -13,6 +13,7 @@ class PluginTests: XCTestCase {
     override func setUp() {
         super.setUp()
         plugin = NativeAudio()
+        plugin.isRunningTests = true
 
         // Create a temporary audio file for testing
         let audioFilePath = NSTemporaryDirectory().appending("testAudio.wav")
@@ -61,8 +62,7 @@ class PluginTests: XCTestCase {
                 withAssetId: self.testAssetId,
                 withPath: self.tempFileURL.path,
                 withChannels: 1,
-                withVolume: 0.5,
-                withFadeDelay: 0.5
+                withVolume: 0.5
             )
 
             // Add it to the plugin's audio list
@@ -71,7 +71,6 @@ class PluginTests: XCTestCase {
             // Verify initial values
             XCTAssertEqual(asset.assetId, self.testAssetId)
             XCTAssertEqual(asset.initialVolume, 0.5)
-            XCTAssertEqual(asset.fadeDelay, 0.5)
 
             expectation.fulfill()
         }
@@ -89,8 +88,7 @@ class PluginTests: XCTestCase {
                 withAssetId: self.testAssetId,
                 withPath: self.tempFileURL.path,
                 withChannels: 1,
-                withVolume: 1.0,
-                withFadeDelay: 0.5
+                withVolume: 1.0
             )
 
             // Add it to the plugin's audio list
@@ -98,7 +96,7 @@ class PluginTests: XCTestCase {
 
             // Test setting volume
             let testVolume: Float = 0.7
-            asset.setVolume(volume: NSNumber(value: testVolume))
+            asset.setVolume(volume: NSNumber(value: testVolume), fadeDuration: 0)
 
             // We can't directly check player.volume as it may take time to set
             // So we'll just verify the method doesn't crash
@@ -123,7 +121,6 @@ class PluginTests: XCTestCase {
                 withPath: testURL,
                 withChannels: 1,
                 withVolume: 0.6,
-                withFadeDelay: 0.3,
                 withHeaders: nil
             )
 
@@ -133,7 +130,6 @@ class PluginTests: XCTestCase {
             // Verify initial values
             XCTAssertEqual(asset.assetId, self.testRemoteAssetId)
             XCTAssertEqual(asset.initialVolume, 0.6)
-            XCTAssertEqual(asset.fadeDelay, 0.3)
             XCTAssertNotNil(asset.asset, "AVURLAsset should be created")
 
             expectation.fulfill()
@@ -180,8 +176,7 @@ class PluginTests: XCTestCase {
                 withAssetId: self.testAssetId,
                 withPath: self.tempFileURL.path,
                 withChannels: 1,
-                withVolume: 1.0,
-                withFadeDelay: 0.2
+                withVolume: 1.0
             )
 
             // Test fade functionality (just make sure it doesn't crash)
@@ -227,7 +222,6 @@ class PluginTests: XCTestCase {
                 withPath: testURL,
                 withChannels: 1,
                 withVolume: 0.6,
-                withFadeDelay: 0.3,
                 withHeaders: nil
             )
 
@@ -264,8 +258,7 @@ class PluginTests: XCTestCase {
                 withAssetId: self.testAssetId,
                 withPath: self.tempFileURL.path,
                 withChannels: 1,
-                withVolume: 1.0,
-                withFadeDelay: 0.5
+                withVolume: 1.0
             )
 
             // Ensure the fade timer is nil initially

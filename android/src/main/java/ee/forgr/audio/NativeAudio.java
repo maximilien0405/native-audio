@@ -3,6 +3,7 @@ package ee.forgr.audio;
 import static ee.forgr.audio.Constant.ASSET_ID;
 import static ee.forgr.audio.Constant.ASSET_PATH;
 import static ee.forgr.audio.Constant.AUDIO_CHANNEL_NUM;
+import static ee.forgr.audio.Constant.DURATION;
 import static ee.forgr.audio.Constant.ERROR_ASSET_NOT_LOADED;
 import static ee.forgr.audio.Constant.ERROR_ASSET_PATH_MISSING;
 import static ee.forgr.audio.Constant.ERROR_AUDIO_ASSET_MISSING;
@@ -69,6 +70,8 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     private final String pluginVersion = "";
 
     public static final String TAG = "NativeAudio";
+    private static final Logger logger = new Logger(TAG);
+    public static boolean debugEnabled = false;
 
     private static HashMap<String, AudioAsset> audioAssetList = new HashMap<>();
     private static ArrayList<AudioAsset> resumeList;
@@ -78,6 +81,9 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     private int originalAudioMode = AudioManager.MODE_INVALID;
 
     private final Map<String, PluginCall> pendingDurationCalls = new HashMap<>();
+    private final Map<String, Handler> pendingPlayHandlers = new HashMap<>();
+    private final Map<String, Runnable> pendingPlayRunnables = new HashMap<>();
+    private final Map<String, JSObject> audioData = new HashMap<>();
 
     // Notification center support
     private boolean showNotification = false;
@@ -194,6 +200,16 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         } catch (Exception ex) {
             Log.d(TAG, "Exception caught while listening for handleOnResume: " + ex.getLocalizedMessage());
         }
+    }
+
+    @PluginMethod
+    public void setDebugMode(PluginCall call) {
+        boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
+        debugEnabled = enabled;
+        if (enabled) {
+            logger.info("Debug mode enabled");
+        }
+        call.resolve();
     }
 
     @PluginMethod
@@ -478,10 +494,21 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             new Runnable() {
                 @Override
                 public void run() {
+                    final String audioId = call.getString(ASSET_ID);
+                    cancelPendingPlay(audioId);
                     playOrLoop("play", call);
                 }
             }
         );
+    }
+
+    private void cancelPendingPlay(String audioId) {
+        if (audioId == null) return;
+        Handler handler = pendingPlayHandlers.remove(audioId);
+        Runnable runnable = pendingPlayRunnables.remove(audioId);
+        if (handler != null && runnable != null) {
+            handler.removeCallbacks(runnable);
+        }
     }
 
     @PluginMethod
@@ -517,21 +544,15 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                 call.reject(ERROR_AUDIO_ID_MISSING + " - " + audioId);
                 return;
             }
-
-            if (audioAssetList.containsKey(audioId)) {
-                AudioAsset asset = audioAssetList.get(audioId);
-                if (asset != null) {
-                    double duration = asset.getDuration();
-                    if (duration > 0) {
-                        JSObject ret = new JSObject();
-                        ret.put("duration", duration);
-                        call.resolve(ret);
-                    } else {
-                        // Save the call to resolve it later when duration is available
-                        saveDurationCall(audioId, call);
-                    }
+            AudioAsset asset = audioAssetList.get(audioId);
+            if (asset != null) {
+                double duration = asset.getDuration();
+                if (duration > 0) {
+                    JSObject ret = new JSObject();
+                    ret.put("duration", duration);
+                    call.resolve(ret);
                 } else {
-                    call.reject(ERROR_ASSET_NOT_LOADED + " - " + audioId);
+                    saveDurationCall(audioId, call);
                 }
             } else {
                 call.reject(ERROR_ASSET_NOT_LOADED + " - " + audioId);
@@ -649,19 +670,18 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             initSoundPool();
             new JSObject();
             JSObject status;
-
             if (isStringValid(call.getString(ASSET_ID))) {
                 String audioId = call.getString(ASSET_ID);
-
-                if (audioAssetList.containsKey(audioId)) {
-                    AudioAsset asset = audioAssetList.get(audioId);
-                    if (asset != null) {
-                        asset.unload();
-                        audioAssetList.remove(audioId);
-                        call.resolve();
-                    } else {
-                        call.reject(ERROR_AUDIO_ASSET_MISSING + " - " + audioId);
-                    }
+                cancelPendingPlay(audioId);
+                pendingPlayHandlers.remove(audioId);
+                pendingPlayRunnables.remove(audioId);
+                audioData.remove(audioId);
+                AudioAsset asset = audioAssetList.get(audioId);
+                if (asset != null) {
+                    clearFadeOutToStopTimer(audioId);
+                    asset.unload();
+                    audioAssetList.remove(audioId);
+                    call.resolve();
                 } else {
                     call.reject(ERROR_AUDIO_ASSET_MISSING + " - " + audioId);
                 }
@@ -669,6 +689,12 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                 call.reject(ERROR_AUDIO_ID_MISSING);
             }
         } catch (Exception ex) {
+            String audioId = call.getString(ASSET_ID);
+            if (audioId != null) {
+                pendingPlayHandlers.remove(audioId);
+                pendingPlayRunnables.remove(audioId);
+                audioData.remove(audioId);
+            }
             call.reject(ex.getMessage());
         }
     }
@@ -680,11 +706,19 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
             String audioId = call.getString(ASSET_ID);
             float volume = call.getFloat(VOLUME, 1F);
+            double durationSecs = call.getDouble(DURATION, 0.0);
+
+            if (durationSecs > 0) {
+                logger.debug("setVolume " + volume + " over duration " + durationSecs + " seconds");
+            } else {
+                logger.debug("setVolume " + volume);
+            }
 
             if (audioAssetList.containsKey(audioId)) {
                 AudioAsset asset = audioAssetList.get(audioId);
                 if (asset != null) {
-                    asset.setVolume(volume);
+                    double durationMs = durationSecs * 1000;
+                    asset.setVolume(volume, durationMs);
                     call.resolve();
                 } else {
                     call.reject(ERROR_AUDIO_ASSET_MISSING);
@@ -748,8 +782,12 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
     @PluginMethod
     public void clearCache(PluginCall call) {
-        RemoteAudioAsset.clearCache(getContext());
-        call.resolve();
+        try {
+            RemoteAudioAsset.clearCache(getContext());
+            call.resolve();
+        } catch (Exception ex) {
+            call.reject(ex.getMessage());
+        }
     }
 
     @PluginMethod
@@ -758,7 +796,10 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             initSoundPool();
 
             String audioId = call.getString(ASSET_ID);
-            Double time = call.getDouble("time", 0.0);
+            clearFadeOutToStopTimer(audioId);
+            double time = call.getDouble("time", 0.0);
+
+            cancelPendingPlay(audioId);
 
             if (!isStringValid(audioId)) {
                 call.reject(ERROR_AUDIO_ID_MISSING + " - " + audioId);
@@ -966,7 +1007,10 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             boolean isLocalUrl = call.getBoolean("isUrl", false);
             boolean isComplex = call.getBoolean("isComplex", false);
 
-            Log.d("AudioPlugin", "Debug: audioId = " + audioId + ", assetPath = " + assetPath + ", isLocalUrl = " + isLocalUrl);
+            Log.d(
+                TAG,
+                "Preloading asset: " + audioId + ", path: " + assetPath + ", isLocalUrl: " + isLocalUrl + ", isComplex: " + isComplex
+            );
 
             if (audioAssetList.containsKey(audioId)) {
                 call.reject(ERROR_AUDIO_EXISTS + " - " + audioId);
@@ -1045,17 +1089,54 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                 call.reject("Asset not found: " + audioId);
             }
         } catch (Exception ex) {
-            Log.e(TAG, "Error in playOrLoop", ex);
+            logger.error("Error in playOrLoop", ex);
             call.reject(ex.getMessage());
+        }
+    }
+
+    private void scheduleFadeOut(AudioAsset asset, double fadeOutDurationMs, double fadeOutStartTimeMs) {
+        try {
+            double duration = asset.getDuration();
+            if (duration > 0) {
+                double fadeOutStartTime = duration - (fadeOutDurationMs / 1000.0);
+                if (fadeOutStartTimeMs > 0) {
+                    fadeOutStartTime = fadeOutStartTimeMs / 1000.0;
+                }
+
+                logger.debug("Scheduling fade-out for asset: " + asset.assetId + ", start time: " + fadeOutStartTime + " seconds");
+
+                // Store fade-out parameters in asset data
+                JSObject data = getAudioAssetData(asset.assetId);
+                data.put("fadeOut", true);
+                data.put("fadeOutStartTime", fadeOutStartTime);
+                data.put("fadeOutDuration", fadeOutDurationMs);
+                setAudioAssetData(asset.assetId, data);
+            } else {
+                logger.warning("Duration not available, skipping fade-out scheduling");
+            }
+        } catch (Exception e) {
+            logger.error("Error handling fade-out", e);
+        }
+    }
+
+    private void clearFadeOutToStopTimer(String audioId) {
+        JSObject data = getAudioAssetData(audioId);
+        if (data.has("fadeOut")) {
+            logger.debug("Cancelling fade-out for asset: " + audioId);
+            data.remove("fadeOut");
+            data.remove("fadeOutStartTime");
+            data.remove("fadeOutDuration");
+            setAudioAssetData(audioId, data);
         }
     }
 
     private void initSoundPool() {
         if (audioAssetList == null) {
+            logger.debug("Initializing audio asset list");
             audioAssetList = new HashMap<>();
         }
-
         if (resumeList == null) {
+            logger.debug("Initializing resume list");
             resumeList = new ArrayList<>();
         }
     }
@@ -1137,18 +1218,30 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
     }
 
     private void saveDurationCall(String audioId, PluginCall call) {
-        Log.d(TAG, "Saving duration call for later: " + audioId);
+        logger.debug("Saving duration call for later: " + audioId);
         pendingDurationCalls.put(audioId, call);
     }
 
     public void notifyDurationAvailable(String assetId, double duration) {
-        Log.d(TAG, "Duration available for " + assetId + ": " + duration);
+        logger.debug("Duration available for " + assetId + ": " + duration);
         PluginCall savedCall = pendingDurationCalls.remove(assetId);
         if (savedCall != null) {
             JSObject ret = new JSObject();
             ret.put("duration", duration);
             savedCall.resolve(ret);
         }
+    }
+
+    private JSObject getAudioAssetData(String audioId) {
+        JSObject data = audioData.get(audioId);
+        if (data == null) {
+            data = new JSObject();
+        }
+        return data;
+    }
+
+    private void setAudioAssetData(String audioId, JSObject data) {
+        audioData.put(audioId, data);
     }
 
     @PluginMethod

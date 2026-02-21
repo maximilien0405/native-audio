@@ -65,41 +65,9 @@ public class RemoteAudioAsset: AudioAsset {
         }
     }
 
-    // Backward-compatible initializer signature
-    init(owner: NativeAudio, withAssetId assetId: String, withPath path: String!, withChannels channels: Int!, withVolume volume: Float!, withFadeDelay _: Float!, withHeaders headers: [String: String]?) {
-        super.init(owner: owner, withAssetId: assetId, withPath: path, withChannels: channels ?? 1, withVolume: volume ?? 1.0)
-
-        let setupBlock = { [weak self] in
-            guard let self else { return }
-            guard let url = URL(string: path ?? "") else {
-                self.logger.error("Invalid URL: %@", String(describing: path))
-                return
-            }
-
-            var options: [String: Any] = [AVURLAssetPreferPreciseDurationAndTimingKey: true]
-            if let headers, !headers.isEmpty {
-                options["AVURLAssetHTTPHeaderFieldsKey"] = headers
-            }
-
-            let asset = AVURLAsset(url: url, options: options)
-            self.asset = asset
-            let channelCount = min(max(channels ?? Constant.DefaultChannels, 1), Constant.MaxChannels)
-
-            for _ in 0..<channelCount {
-                let playerItem = AVPlayerItem(asset: asset)
-                let player = AVPlayer(playerItem: playerItem)
-                player.volume = self.initialVolume
-                player.rate = 1.0
-                self.playerItems.append(playerItem)
-                self.players.append(player)
-            }
-        }
-
-        if owner.isRunningTests {
-            setupBlock()
-        } else {
-            owner.executeOnAudioQueue(setupBlock)
-        }
+    // Backward-compatible initializer signature (delegates to primary init)
+    convenience init(owner: NativeAudio, withAssetId assetId: String, withPath path: String!, withChannels channels: Int!, withVolume volume: Float!, withFadeDelay _: Float!, withHeaders headers: [String: String]?) {
+        self.init(owner: owner, withAssetId: assetId, withPath: path, withChannels: channels, withVolume: volume, withHeaders: headers)
     }
 
     deinit {

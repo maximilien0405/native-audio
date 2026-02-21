@@ -52,6 +52,10 @@ class PluginTests: XCTestCase {
         FileManager.default.createFile(atPath: path, contents: Data(), attributes: nil)
     }
 
+}
+
+extension PluginTests {
+
     func testAudioAssetInitialization() {
         let expectation = XCTestExpectation(description: "Initialize AudioAsset")
 
@@ -510,6 +514,10 @@ class PluginTests: XCTestCase {
 
         wait(for: [expectation], timeout: 5.0)
     }
+
+}
+
+extension PluginTests {
 
     func testPlayOnceWithNotificationMetadata() {
         let expectation = XCTestExpectation(description: "PlayOnce with notification metadata")

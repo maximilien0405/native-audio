@@ -360,6 +360,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     ///   - `notificationMetadata`: Metadata for Now Playing info (optional)
     ///
     /// The call is resolved with `["assetId": "<generated id>"]` on success or rejected with an error message on failure.
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     @objc func playOnce(_ call: CAPPluginCall) {
         // Generate unique temporary asset ID
         let assetId = "playOnce_\(Int(Date().timeIntervalSince1970 * 1000))_\(UUID().uuidString.prefix(8))"
@@ -1009,6 +1010,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     ///     - "notificationMetadata" (Object, optional): now‑playing metadata with keys "title", "artist", "album", and "artworkUrl".
     ///   - isComplex: If true, creates a full-featured AudioAsset/RemoteAudioAsset; if false, creates a lightweight system sound identifier.
     /// - Behavior: Resolves the provided call on successful preload; rejects the call with an error message if validation fails or the asset cannot be created.
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     @objc private func preloadAsset(_ call: CAPPluginCall, isComplex complex: Bool) {
         // Common default values to ensure consistency
         let audioId = call.getString(Constant.AssetIdKey) ?? ""
@@ -1164,8 +1166,6 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             call.resolve()
         }
     }
-    // swiftlint:enable cyclomatic_complexity function_body_length
-
     private func stopAudio(audioId: String, fadeOut: Bool, fadeOutDuration: Double) throws {
         var asset: AudioAsset?
 

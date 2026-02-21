@@ -110,6 +110,10 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
         channels = []
     }
 
+}
+
+extension AudioAsset {
+
     func getCurrentTime() -> TimeInterval {
         var result: TimeInterval = 0
         owner?.executeOnAudioQueue { [weak self] in
@@ -363,6 +367,10 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
             self.currentTimeTimer = nil
         }
     }
+
+}
+
+extension AudioAsset {
 
     private func dispatchComplete() {
         if dispatchedCompleteMap[assetId] == true {

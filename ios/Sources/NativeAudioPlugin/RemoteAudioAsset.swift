@@ -84,6 +84,10 @@ public class RemoteAudioAsset: AudioAsset {
         cancelFade()
     }
 
+}
+
+extension RemoteAudioAsset {
+
     func playerDidFinishPlaying(player: AVPlayer) {
         owner?.executeOnAudioQueue { [weak self] in
             guard let self else { return }
@@ -333,6 +337,10 @@ public class RemoteAudioAsset: AudioAsset {
     override func stopWithFade() {
         stopWithFade(fadeOutDuration: TimeInterval(Constant.DefaultFadeDuration), toPause: false)
     }
+
+}
+
+extension RemoteAudioAsset {
 
     func fadeIn(player: AVPlayer, fadeInDuration: TimeInterval, targetVolume: Float) {
         cancelFade()

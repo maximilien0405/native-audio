@@ -505,6 +505,11 @@ public class StreamAudioAsset extends AudioAsset {
         final float initialVolume = Math.max(player.getVolume(), minVolume);
         final float finalTargetVolume = Math.max(targetVolume, minVolume);
         final double ratio = Math.pow(finalTargetVolume / initialVolume, 1.0 / steps);
+        if (Double.isNaN(ratio) || Double.isInfinite(ratio)) {
+            player.setVolume(finalTargetVolume);
+            fadeState = FadeState.NONE;
+            return;
+        }
 
         fadeTask = fadeExecutor.scheduleWithFixedDelay(
             new Runnable() {

@@ -566,16 +566,16 @@ public class RemoteAudioAsset extends AudioAsset {
         Log.d(
             TAG,
             "Beginning fade in at time " +
-            getCurrentPosition() +
-            " over " +
-            (fadeInDurationMs / 1000.0) +
-            "s to target volume " +
-            targetVolume +
-            " in " +
-            steps +
-            " steps (step duration: " +
-            (FADE_DELAY_MS / 1000.0) +
-            "s"
+                getCurrentPosition() +
+                " over " +
+                (fadeInDurationMs / 1000.0) +
+                "s to target volume " +
+                targetVolume +
+                " in " +
+                steps +
+                " steps (step duration: " +
+                (FADE_DELAY_MS / 1000.0) +
+                "s"
         );
 
         fadeTask = fadeExecutor.scheduleWithFixedDelay(
@@ -638,16 +638,16 @@ public class RemoteAudioAsset extends AudioAsset {
         Log.d(
             TAG,
             "Beginning fade out from volume " +
-            initialVolume +
-            " at time " +
-            getCurrentPosition() +
-            " over " +
-            (fadeOutDurationMs / 1000.0) +
-            "s in " +
-            steps +
-            " steps (step duration: " +
-            (FADE_DELAY_MS / 1000.0) +
-            "s)"
+                initialVolume +
+                " at time " +
+                getCurrentPosition() +
+                " over " +
+                (fadeOutDurationMs / 1000.0) +
+                "s in " +
+                steps +
+                " steps (step duration: " +
+                (FADE_DELAY_MS / 1000.0) +
+                "s)"
         );
 
         fadeTask = fadeExecutor.scheduleWithFixedDelay(
@@ -726,18 +726,18 @@ public class RemoteAudioAsset extends AudioAsset {
         Log.d(
             TAG,
             "Beginning exponential fade from volume " +
-            initialVolume +
-            " to " +
-            finalTargetVolume +
-            " over " +
-            (fadeDurationMs / 1000.0) +
-            "s in " +
-            steps +
-            " steps (step duration: " +
-            (FADE_DELAY_MS / 1000.0) +
-            "s, ratio: " +
-            ratio +
-            ")"
+                initialVolume +
+                " to " +
+                finalTargetVolume +
+                " over " +
+                (fadeDurationMs / 1000.0) +
+                "s in " +
+                steps +
+                " steps (step duration: " +
+                (FADE_DELAY_MS / 1000.0) +
+                "s, ratio: " +
+                ratio +
+                ")"
         );
 
         double finalRatio = ratio;

@@ -17,7 +17,8 @@ import androidx.media3.common.util.UnstableApi;
 
 @UnstableApi
 public class AudioDispatcher
-    implements MediaPlayer.OnPreparedListener, MediaPlayer.OnCompletionListener, MediaPlayer.OnSeekCompleteListener {
+    implements MediaPlayer.OnPreparedListener, MediaPlayer.OnCompletionListener, MediaPlayer.OnSeekCompleteListener
+{
 
     private final String TAG = "AudioDispatcher";
     private final MediaPlayer mediaPlayer;
@@ -45,7 +46,7 @@ public class AudioDispatcher
                 .build()
         );
         mediaPlayer.setVolume(volume, volume);
-            currentVolume = volume;
+        currentVolume = volume;
         mediaPlayer.setPlaybackParams(mediaPlayer.getPlaybackParams().setSpeed(1.0f));
         mediaPlayer.prepare();
     }

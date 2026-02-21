@@ -37,7 +37,10 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
   private static readonly AUDIO_PRELOAD_OPTIONS_MAP: Map<string, PreloadOptions> = new Map<string, PreloadOptions>();
   private static readonly AUDIO_DATA_MAP: Map<string, AudioAssetData> = new Map<string, AudioAssetData>();
   private static readonly AUDIO_ASSET_BY_ASSET_ID: Map<string, AudioAsset> = new Map<string, AudioAsset>();
-  private static readonly AUDIO_CONTEXT_MAP: Map<HTMLMediaElement, AudioContext> = new Map<HTMLMediaElement, AudioContext>();
+  private static readonly AUDIO_CONTEXT_MAP: Map<HTMLMediaElement, AudioContext> = new Map<
+    HTMLMediaElement,
+    AudioContext
+  >();
   private static readonly MEDIA_ELEMENT_SOURCE_MAP: Map<HTMLMediaElement, MediaElementAudioSourceNode> = new Map<
     HTMLMediaElement,
     MediaElementAudioSourceNode
@@ -230,11 +233,15 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
       }
 
       const currentAudio = this.getAudioAsset(assetId).audio;
-      currentAudio.addEventListener('ended', () => {
-        cleanupHandler().catch((error) => {
-          console.error('[NativeAudio] Error during ended cleanup:', error);
-        });
-      }, { once: true });
+      currentAudio.addEventListener(
+        'ended',
+        () => {
+          cleanupHandler().catch((error) => {
+            console.error('[NativeAudio] Error during ended cleanup:', error);
+          });
+        },
+        { once: true },
+      );
 
       currentAudio.addEventListener(
         'error',
@@ -532,7 +539,10 @@ export class NativeAudioWeb extends WebPlugin implements NativeAudio {
     return audioContext;
   }
 
-  private getOrCreateMediaElementSource(audioContext: AudioContext, audio: HTMLAudioElement): MediaElementAudioSourceNode {
+  private getOrCreateMediaElementSource(
+    audioContext: AudioContext,
+    audio: HTMLAudioElement,
+  ): MediaElementAudioSourceNode {
     if (NativeAudioWeb.MEDIA_ELEMENT_SOURCE_MAP.has(audio)) {
       return NativeAudioWeb.MEDIA_ELEMENT_SOURCE_MAP.get(audio) as MediaElementAudioSourceNode;
     }

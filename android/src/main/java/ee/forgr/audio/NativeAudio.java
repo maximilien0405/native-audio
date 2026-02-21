@@ -3,25 +3,25 @@ package ee.forgr.audio;
 import static ee.forgr.audio.Constant.ASSET_ID;
 import static ee.forgr.audio.Constant.ASSET_PATH;
 import static ee.forgr.audio.Constant.AUDIO_CHANNEL_NUM;
-import static ee.forgr.audio.Constant.DURATION;
-import static ee.forgr.audio.Constant.FADE_IN;
-import static ee.forgr.audio.Constant.FADE_IN_DURATION;
-import static ee.forgr.audio.Constant.FADE_OUT;
-import static ee.forgr.audio.Constant.FADE_OUT_DURATION;
-import static ee.forgr.audio.Constant.FADE_OUT_START_TIME;
 import static ee.forgr.audio.Constant.DELAY;
+import static ee.forgr.audio.Constant.DURATION;
 import static ee.forgr.audio.Constant.ERROR_ASSET_NOT_LOADED;
 import static ee.forgr.audio.Constant.ERROR_ASSET_PATH_MISSING;
 import static ee.forgr.audio.Constant.ERROR_AUDIO_ASSET_MISSING;
 import static ee.forgr.audio.Constant.ERROR_AUDIO_EXISTS;
 import static ee.forgr.audio.Constant.ERROR_AUDIO_ID_MISSING;
+import static ee.forgr.audio.Constant.FADE_IN;
+import static ee.forgr.audio.Constant.FADE_IN_DURATION;
+import static ee.forgr.audio.Constant.FADE_OUT;
+import static ee.forgr.audio.Constant.FADE_OUT_DURATION;
+import static ee.forgr.audio.Constant.FADE_OUT_START_TIME;
 import static ee.forgr.audio.Constant.LOOP;
-import static ee.forgr.audio.Constant.PLAY;
 import static ee.forgr.audio.Constant.NOTIFICATION_METADATA;
 import static ee.forgr.audio.Constant.OPT_FOCUS_AUDIO;
+import static ee.forgr.audio.Constant.PLAY;
 import static ee.forgr.audio.Constant.RATE;
-import static ee.forgr.audio.Constant.TIME;
 import static ee.forgr.audio.Constant.SHOW_NOTIFICATION;
+import static ee.forgr.audio.Constant.TIME;
 import static ee.forgr.audio.Constant.VOLUME;
 
 import android.Manifest;
@@ -513,8 +513,8 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                         final double delaySecs = call.getDouble(DELAY, 0.0);
                         final float volume = call.getFloat(VOLUME, 1F);
                         final boolean fadeIn = call.getBoolean(FADE_IN, false);
-                        final double fadeInDurationMs = call.getDouble(FADE_IN_DURATION, AudioAsset.DEFAULT_FADE_DURATION_MS / 1000.0) *
-                        1000.0;
+                        final double fadeInDurationMs =
+                            call.getDouble(FADE_IN_DURATION, AudioAsset.DEFAULT_FADE_DURATION_MS / 1000.0) * 1000.0;
                         final boolean fadeOut = call.getBoolean(FADE_OUT, false);
                         final double fadeOutDurationMs =
                             call.getDouble(FADE_OUT_DURATION, AudioAsset.DEFAULT_FADE_DURATION_MS / 1000.0) * 1000.0;
@@ -525,25 +525,24 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
                         if (delaySecs > 0) {
                             final Handler handler = new Handler(Looper.getMainLooper());
-                            final Runnable runnable =
-                                new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        pendingPlayHandlers.remove(audioId);
-                                        pendingPlayRunnables.remove(audioId);
-                                        executePlay(
-                                            call,
-                                            audioId,
-                                            time,
-                                            volume,
-                                            fadeIn,
-                                            fadeInDurationMs,
-                                            fadeOut,
-                                            fadeOutDurationMs,
-                                            fadeOutStartTimeSecs
-                                        );
-                                    }
-                                };
+                            final Runnable runnable = new Runnable() {
+                                @Override
+                                public void run() {
+                                    pendingPlayHandlers.remove(audioId);
+                                    pendingPlayRunnables.remove(audioId);
+                                    executePlay(
+                                        call,
+                                        audioId,
+                                        time,
+                                        volume,
+                                        fadeIn,
+                                        fadeInDurationMs,
+                                        fadeOut,
+                                        fadeOutDurationMs,
+                                        fadeOutStartTimeSecs
+                                    );
+                                }
+                            };
                             pendingPlayHandlers.put(audioId, handler);
                             pendingPlayRunnables.put(audioId, runnable);
                             handler.postDelayed(runnable, Math.max(0L, (long) (delaySecs * 1000)));
@@ -694,8 +693,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             initSoundPool();
             String audioId = call.getString(ASSET_ID);
             final boolean fadeOut = call.getBoolean(FADE_OUT, false);
-            final double fadeOutDurationMs = call.getDouble(FADE_OUT_DURATION, AudioAsset.DEFAULT_FADE_DURATION_MS / 1000.0) *
-            1000.0;
+            final double fadeOutDurationMs = call.getDouble(FADE_OUT_DURATION, AudioAsset.DEFAULT_FADE_DURATION_MS / 1000.0) * 1000.0;
 
             cancelPendingPlay(audioId);
 
@@ -741,8 +739,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             initSoundPool();
             String audioId = call.getString(ASSET_ID);
             final boolean fadeIn = call.getBoolean(FADE_IN, false);
-            final double fadeInDurationMs = call.getDouble(FADE_IN_DURATION, AudioAsset.DEFAULT_FADE_DURATION_MS / 1000.0) *
-            1000.0;
+            final double fadeInDurationMs = call.getDouble(FADE_IN_DURATION, AudioAsset.DEFAULT_FADE_DURATION_MS / 1000.0) * 1000.0;
 
             if (audioAssetList.containsKey(audioId)) {
                 AudioAsset asset = audioAssetList.get(audioId);
@@ -789,8 +786,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                     try {
                         String audioId = call.getString(ASSET_ID);
                         boolean fadeOut = call.getBoolean(FADE_OUT, false);
-                        double fadeOutDurationMs =
-                            call.getDouble(FADE_OUT_DURATION, AudioAsset.DEFAULT_FADE_DURATION_MS / 1000.0) * 1000.0;
+                        double fadeOutDurationMs = call.getDouble(FADE_OUT_DURATION, AudioAsset.DEFAULT_FADE_DURATION_MS / 1000.0) * 1000.0;
 
                         if (!isStringValid(audioId)) {
                             call.reject(ERROR_AUDIO_ID_MISSING + " - " + audioId);

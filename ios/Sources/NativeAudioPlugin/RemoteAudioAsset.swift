@@ -1,5 +1,6 @@
 import AVFoundation
 
+// swiftlint:disable:next type_body_length
 public class RemoteAudioAsset: AudioAsset {
     var playerItems: [AVPlayerItem] = []
     var players: [AVPlayer] = []

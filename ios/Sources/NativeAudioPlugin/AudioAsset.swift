@@ -1,5 +1,6 @@
 import AVFoundation
 
+// swiftlint:disable:next type_body_length
 public class AudioAsset: NSObject, AVAudioPlayerDelegate {
 
     var channels: [AVAudioPlayer] = []

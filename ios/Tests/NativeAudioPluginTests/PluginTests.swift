@@ -3,10 +3,11 @@ import Capacitor
 import AVFoundation
 @testable import NativeAudioPlugin
 
+// swiftlint:disable file_length
 class PluginTests: XCTestCase {
 
-    var plugin: NativeAudio!
-    var tempFileURL: URL!
+    var plugin = NativeAudio()
+    var tempFileURL = URL(fileURLWithPath: NSTemporaryDirectory().appending("testAudio.wav"))
     var testAssetId = "testAssetId"
     var testRemoteAssetId = "testRemoteAssetId"
 
@@ -50,6 +51,14 @@ class PluginTests: XCTestCase {
         // In a real scenario, you would create a small audio file for testing
         // For now, we'll just create an empty file
         FileManager.default.createFile(atPath: path, contents: Data(), attributes: nil)
+    }
+
+    private func makeCall(callbackId: String, options: [String: Any], onErrorMessage: String) -> CAPPluginCall {
+        guard let call = CAPPluginCall(callbackId: callbackId, options: options, success: { _, _ in }, error: { _ in }) else {
+            XCTFail("Failed to create CAPPluginCall: \(onErrorMessage)")
+            fatalError("Failed to create CAPPluginCall")
+        }
+        return call
     }
 
 }
@@ -144,16 +153,12 @@ extension PluginTests {
 
     func testPluginPreloadMethod() {
         // Create a plugin call to test the preload method
-        let call = CAPPluginCall(callbackId: "test", options: [
+        let call = makeCall(callbackId: "test", options: [
             "assetId": testAssetId,
             "assetPath": tempFileURL.path,
             "volume": 0.8,
             "audioChannelNum": 2
-        ], success: { (_, _) in
-            // Success case
-        }, error: { (_) in
-            XCTFail("Preload shouldn't fail")
-        })!
+        ], onErrorMessage: "Preload call creation")
 
         // Call the plugin method
         plugin.preload(call)
@@ -312,17 +317,13 @@ extension PluginTests {
         let expectation = XCTestExpectation(description: "PlayOnce with auto-play")
         var returnedAssetId: String?
 
-        let call = CAPPluginCall(callbackId: "test", options: [
+        let call = makeCall(callbackId: "test", options: [
             "assetPath": tempFileURL.path,
             "volume": 1.0,
             "isUrl": true,
             "autoPlay": true
-        ], success: { (result, _) in
-            // Capture the returned assetId
-            returnedAssetId = result?.data?["assetId"] as? String
-        }, error: { (_) in
-            XCTFail("PlayOnce shouldn't fail")
-        })!
+        ], onErrorMessage: "playOnce auto-play call")
+        _ = returnedAssetId
 
         plugin.playOnce(call)
 
@@ -354,16 +355,12 @@ extension PluginTests {
     func testPlayOnceWithoutAutoPlay() {
         let expectation = XCTestExpectation(description: "PlayOnce without auto-play")
 
-        let call = CAPPluginCall(callbackId: "test", options: [
+        let call = makeCall(callbackId: "test", options: [
             "assetPath": tempFileURL.path,
             "volume": 0.8,
             "isUrl": true,
             "autoPlay": false
-        ], success: { (_, _) in
-            // Success case
-        }, error: { (_) in
-            XCTFail("PlayOnce shouldn't fail")
-        })!
+        ], onErrorMessage: "playOnce no-autoplay call")
 
         plugin.playOnce(call)
 
@@ -398,16 +395,12 @@ extension PluginTests {
     func testPlayOnceCleanupAfterCompletion() {
         let expectation = XCTestExpectation(description: "PlayOnce cleanup after completion")
 
-        let call = CAPPluginCall(callbackId: "test", options: [
+        let call = makeCall(callbackId: "test", options: [
             "assetPath": tempFileURL.path,
             "volume": 1.0,
             "isUrl": true,
             "autoPlay": true
-        ], success: { (_, _) in
-            // Success case
-        }, error: { (_) in
-            XCTFail("PlayOnce shouldn't fail")
-        })!
+        ], onErrorMessage: "playOnce cleanup call")
 
         plugin.playOnce(call)
 
@@ -467,17 +460,13 @@ extension PluginTests {
             return
         }
 
-        let call = CAPPluginCall(callbackId: "test", options: [
+        let call = makeCall(callbackId: "test", options: [
             "assetPath": deletableURL.absoluteString,
             "volume": 1.0,
             "isUrl": true,
             "autoPlay": true,
             "deleteAfterPlay": true
-        ], success: { (_, _) in
-            // Success case
-        }, error: { (_) in
-            XCTFail("PlayOnce shouldn't fail")
-        })!
+        ], onErrorMessage: "playOnce delete-after-play call")
 
         plugin.playOnce(call)
 
@@ -522,7 +511,7 @@ extension PluginTests {
     func testPlayOnceWithNotificationMetadata() {
         let expectation = XCTestExpectation(description: "PlayOnce with notification metadata")
 
-        let call = CAPPluginCall(callbackId: "test", options: [
+        let call = makeCall(callbackId: "test", options: [
             "assetPath": tempFileURL.path,
             "volume": 1.0,
             "isUrl": true,
@@ -533,11 +522,7 @@ extension PluginTests {
                 "album": "Test Album",
                 "artworkUrl": "https://example.com/artwork.jpg"
             ]
-        ], success: { (_, _) in
-            // Success case
-        }, error: { (_) in
-            XCTFail("PlayOnce shouldn't fail")
-        })!
+        ], onErrorMessage: "playOnce metadata call")
 
         plugin.playOnce(call)
 
@@ -574,16 +559,12 @@ extension PluginTests {
         let expectation = XCTestExpectation(description: "PlayOnce error handling and cleanup")
 
         // Use an invalid file path to trigger error
-        let call = CAPPluginCall(callbackId: "test", options: [
+        let call = makeCall(callbackId: "test", options: [
             "assetPath": "/invalid/path/to/nonexistent.wav",
             "volume": 1.0,
             "isUrl": true,
             "autoPlay": true
-        ], success: { (_, _) in
-            XCTFail("Should not succeed with invalid path")
-        }, error: { (_) in
-            // Expected error case
-        })!
+        ], onErrorMessage: "playOnce error handling call")
 
         plugin.playOnce(call)
 
@@ -617,32 +598,24 @@ extension PluginTests {
         var firstAssetId: String?
         var secondAssetId: String?
 
-        let call1 = CAPPluginCall(callbackId: "test1", options: [
+        let call1 = makeCall(callbackId: "test1", options: [
             "assetPath": tempFileURL.path,
             "volume": 1.0,
             "isUrl": true,
             "autoPlay": false
-        ], success: { (result, _) in
-            // Capture returned assetId from public API
-            firstAssetId = result?.data?["assetId"] as? String
-        }, error: { (_) in
-            XCTFail("PlayOnce shouldn't fail")
-        })!
+        ], onErrorMessage: "playOnce unique call1")
+        _ = firstAssetId
 
         plugin.playOnce(call1)
 
         // Create second playOnce
-        let call2 = CAPPluginCall(callbackId: "test2", options: [
+        let call2 = makeCall(callbackId: "test2", options: [
             "assetPath": tempFileURL.path,
             "volume": 1.0,
             "isUrl": true,
             "autoPlay": false
-        ], success: { (result, _) in
-            // Capture returned assetId from public API
-            secondAssetId = result?.data?["assetId"] as? String
-        }, error: { (_) in
-            XCTFail("PlayOnce shouldn't fail")
-        })!
+        ], onErrorMessage: "playOnce unique call2")
+        _ = secondAssetId
 
         plugin.playOnce(call2)
 
@@ -672,3 +645,4 @@ extension PluginTests {
         wait(for: [expectation], timeout: 5.0)
     }
 }
+// swiftlint:enable file_length

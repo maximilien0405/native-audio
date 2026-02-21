@@ -8,10 +8,9 @@ enum MyError: Error {
     case runtimeError(String)
 }
 
-/// Please read the Capacitor iOS Plugin Development Guide
-/// here: https://capacitor.ionicframework.com/docs/plugins/ios
-// swiftlint:disable type_body_length file_length
+// swiftlint:disable file_length
 @objc(NativeAudio)
+// swiftlint:disable:next type_body_length
 public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     private let pluginVersion: String = "8.2.12"
     public let identifier = "NativeAudio"
@@ -343,23 +342,6 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         preloadAsset(call, isComplex: true)
     }
 
-    /// Plays an audio file once with automatic cleanup after completion.
-    ///
-    /// This is a convenience method that combines preload, play, and unload into a single call.
-    /// The audio asset is automatically cleaned up after playback completes or if an error occurs.
-    /// Preloads and optionally plays a one-shot audio asset, then removes it from internal storage after completion.
-    ///
-    /// The method generates a unique temporary asset identifier, loads the asset from a local file, a public bundle resource, or a remote URL (with optional headers), and tracks it as a transient "play-once" asset. If `autoPlay` is true the asset will begin playback immediately and the plugin's audio session will be activated. When playback completes (or when the asset is unloaded), the asset and any associated Now Playing metadata are removed. If `deleteAfterPlay` is true and the source was a local file URL, the file is deleted from disk if it passes safe-sandbox checks.
-    ///
-    /// - Parameter call: The Capacitor plugin call containing:
-    ///   - `assetPath`: Path to the audio file (required)
-    ///   - `volume`: Playback volume 0.1-1.0 (default: 1.0)
-    ///   - `isUrl`: Whether assetPath is a URL (default: false)
-    ///   - `autoPlay`: Start playback immediately (default: true)
-    ///   - `deleteAfterPlay`: Delete file after playback (default: false)
-    ///   - `notificationMetadata`: Metadata for Now Playing info (optional)
-    ///
-    /// The call is resolved with `["assetId": "<generated id>"]` on success or rejected with an error message on failure.
     // swiftlint:disable:next cyclomatic_complexity function_body_length
     @objc func playOnce(_ call: CAPPluginCall) {
         // Generate unique temporary asset ID
@@ -665,6 +647,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
+    // swiftlint:disable:next function_body_length
     @objc func play(_ call: CAPPluginCall) {
         let audioId = call.getString(Constant.AssetIdKey) ?? ""
         let time = max(call.getDouble(Constant.Time) ?? 0, 0)
@@ -709,7 +692,12 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                         self.pendingPlayTasks[audioId] = nil
 
                         if fadeOut {
-                            self.handleFadeOut(for: audioAsset, audioId: audioId, fadeOutDuration: fadeOutDuration, fadeOutStartTime: fadeOutStartTime)
+                            self.handleFadeOut(
+                                for: audioAsset,
+                                audioId: audioId,
+                                fadeOutDuration: fadeOutDuration,
+                                fadeOutStartTime: fadeOutStartTime
+                            )
                         }
 
                         if self.showNotification {
@@ -993,23 +981,6 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
-    /// Preloads an audio asset into the plugin's internal registry for later playback.
-    ///
-    /// Accepts a CAPPluginCall containing asset information, validates inputs, stores optional now‑playing metadata, and creates either a lightweight system sound (for non-complex assets) or a full AudioAsset/RemoteAudioAsset (for complex assets). Supports local file paths, file URLs, public bundle resources, and remote URLs (with optional headers).
-    /// - Parameters:
-    ///   - call: CAPPluginCall containing required keys:
-    ///     - "assetId" (String): unique identifier for the asset.
-    ///     - "assetPath" (String): local path, file URL, public bundle resource, or remote URL.
-    ///     - "isUrl" (Bool, optional): treat the provided path as a raw URL when false/omitted for non-complex loads; ignored for complex loads.
-    ///     - For complex loads:
-    ///       - "volume" (Float, optional): initial volume (clamped to valid range).
-    ///       - "channels" (Int, optional): number of audio channels.
-    ///       - "delay" (Float, optional): fade delay.
-    ///     - For remote URLs:
-    ///       - "headers" (Object, optional): HTTP headers to use when loading the remote asset.
-    ///     - "notificationMetadata" (Object, optional): now‑playing metadata with keys "title", "artist", "album", and "artworkUrl".
-    ///   - isComplex: If true, creates a full-featured AudioAsset/RemoteAudioAsset; if false, creates a lightweight system sound identifier.
-    /// - Behavior: Resolves the provided call on successful preload; rejects the call with an error message if validation fails or the asset cannot be created.
     // swiftlint:disable:next cyclomatic_complexity function_body_length
     @objc private func preloadAsset(_ call: CAPPluginCall, isComplex complex: Bool) {
         // Common default values to ensure consistency
@@ -1100,7 +1071,14 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                             }
                         }
                     }
-                    let remoteAudioAsset = RemoteAudioAsset(owner: self, withAssetId: audioId, withPath: assetPath, withChannels: channels, withVolume: volume, withHeaders: headers)
+                    let remoteAudioAsset = RemoteAudioAsset(
+                        owner: self,
+                        withAssetId: audioId,
+                        withPath: assetPath,
+                        withChannels: channels,
+                        withVolume: volume,
+                        withHeaders: headers
+                    )
                     self.audioList[audioId] = remoteAudioAsset
                     call.resolve()
                     return

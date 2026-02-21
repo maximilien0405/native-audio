@@ -9,11 +9,11 @@ extension RemoteAudioAsset {
         let fadeStep = targetVolume / Float(steps)
         var currentVolume: Float = 0
 
-        var task: DispatchWorkItem!
+        var task: DispatchWorkItem?
         task = DispatchWorkItem { [weak self] in
             guard let self else { return }
             for _ in 0..<steps {
-                guard !task.isCancelled, self.isPlaying(), player.timeControlStatus == .playing else { return }
+                guard let task, !task.isCancelled, self.isPlaying(), player.timeControlStatus == .playing else { return }
                 currentVolume += fadeStep
                 DispatchQueue.main.async {
                     player.volume = min(currentVolume, targetVolume)
@@ -22,7 +22,9 @@ extension RemoteAudioAsset {
             }
         }
         fadeTask = task
-        fadeQueue.async(execute: task)
+        if let task {
+            fadeQueue.async(execute: task)
+        }
     }
 
     func fadeOut(player: AVPlayer, fadeOutDuration: TimeInterval, toPause: Bool = false) {
@@ -32,11 +34,11 @@ extension RemoteAudioAsset {
         let fadeStep = player.volume / Float(steps)
         var currentVolume = player.volume
 
-        var task: DispatchWorkItem!
+        var task: DispatchWorkItem?
         task = DispatchWorkItem { [weak self] in
             guard let self else { return }
             for _ in 0..<steps {
-                guard !task.isCancelled, self.isPlaying(), player.timeControlStatus == .playing else { return }
+                guard let task, !task.isCancelled, self.isPlaying(), player.timeControlStatus == .playing else { return }
                 currentVolume -= fadeStep
                 DispatchQueue.main.async {
                     player.volume = max(currentVolume, 0)
@@ -56,7 +58,9 @@ extension RemoteAudioAsset {
             }
         }
         fadeTask = task
-        fadeQueue.async(execute: task)
+        if let task {
+            fadeQueue.async(execute: task)
+        }
     }
 
     func fadeTo(player: AVPlayer, fadeOutDuration: TimeInterval, targetVolume: Float) {
@@ -69,11 +73,11 @@ extension RemoteAudioAsset {
         let safeTargetVolume: Float = max(targetVolume, minVolume)
         let ratio = pow(safeTargetVolume / currentVolume, 1.0 / Float(steps))
 
-        var task: DispatchWorkItem!
+        var task: DispatchWorkItem?
         task = DispatchWorkItem { [weak self] in
             guard let self else { return }
             for _ in 0..<steps {
-                guard !task.isCancelled, self.isPlaying(), player.timeControlStatus == .playing else { return }
+                guard let task, !task.isCancelled, self.isPlaying(), player.timeControlStatus == .playing else { return }
                 currentVolume *= ratio
                 DispatchQueue.main.async {
                     player.volume = min(max(currentVolume, minVolume), self.maxVolume)
@@ -82,7 +86,9 @@ extension RemoteAudioAsset {
             }
         }
         fadeTask = task
-        fadeQueue.async(execute: task)
+        if let task {
+            fadeQueue.async(execute: task)
+        }
     }
 
     static func clearCache() {

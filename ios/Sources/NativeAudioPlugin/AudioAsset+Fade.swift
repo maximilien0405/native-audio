@@ -22,11 +22,11 @@ extension AudioAsset {
         let fadeStep = targetVolume / Float(steps)
         var currentVolume: Float = 0
 
-        var task: DispatchWorkItem!
+        var task: DispatchWorkItem?
         task = DispatchWorkItem { [weak self] in
             guard let self else { return }
             for _ in 0..<steps {
-                guard !task.isCancelled, self.isPlaying(), audio.isPlaying else { return }
+                guard let task, !task.isCancelled, self.isPlaying(), audio.isPlaying else { return }
                 currentVolume += fadeStep
                 DispatchQueue.main.async {
                     audio.volume = min(max(currentVolume, 0), targetVolume)
@@ -35,7 +35,9 @@ extension AudioAsset {
             }
         }
         fadeTask = task
-        fadeQueue.async(execute: task)
+        if let task {
+            fadeQueue.async(execute: task)
+        }
     }
 
     func fadeOut(audio: AVAudioPlayer, fadeOutDuration: TimeInterval, toPause: Bool = false) {
@@ -45,11 +47,11 @@ extension AudioAsset {
         var currentVolume = audio.volume
         let fadeStep = currentVolume / Float(steps)
 
-        var task: DispatchWorkItem!
+        var task: DispatchWorkItem?
         task = DispatchWorkItem { [weak self] in
             guard let self else { return }
             for _ in 0..<steps {
-                guard !task.isCancelled, self.isPlaying(), audio.isPlaying else { return }
+                guard let task, !task.isCancelled, self.isPlaying(), audio.isPlaying else { return }
                 currentVolume -= fadeStep
                 DispatchQueue.main.async {
                     audio.volume = max(currentVolume, 0)
@@ -67,7 +69,9 @@ extension AudioAsset {
             }
         }
         fadeTask = task
-        fadeQueue.async(execute: task)
+        if let task {
+            fadeQueue.async(execute: task)
+        }
     }
 
     func fadeTo(audio: AVAudioPlayer, fadeDuration: TimeInterval, targetVolume: Float) {
@@ -80,11 +84,11 @@ extension AudioAsset {
         let safeTargetVolume = max(targetVolume, minVolume)
         let ratio = pow(safeTargetVolume / currentVolume, 1.0 / Float(steps))
 
-        var task: DispatchWorkItem!
+        var task: DispatchWorkItem?
         task = DispatchWorkItem { [weak self] in
             guard let self else { return }
             for _ in 0..<steps {
-                guard !task.isCancelled, self.isPlaying(), audio.isPlaying else { return }
+                guard let task, !task.isCancelled, self.isPlaying(), audio.isPlaying else { return }
                 currentVolume *= ratio
                 DispatchQueue.main.async {
                     audio.volume = min(max(currentVolume, minVolume), self.maxVolume)
@@ -93,6 +97,8 @@ extension AudioAsset {
             }
         }
         fadeTask = task
-        fadeQueue.async(execute: task)
+        if let task {
+            fadeQueue.async(execute: task)
+        }
     }
 }

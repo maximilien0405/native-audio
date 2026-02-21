@@ -11,26 +11,26 @@ public class Logger {
     }
 
     func error(_ message: String, _ args: CVarArg...) {
-        osLog(message, level: .error, args)
+        osLog(message, args, level: .error)
     }
 
     func warning(_ message: String, _ args: CVarArg...) {
-        osLog(message, level: .fault, args)
+        osLog(message, args, level: .fault)
     }
 
     func info(_ message: String, _ args: CVarArg...) {
-        osLog(message, level: .info, args)
+        osLog(message, args, level: .info)
     }
 
     func debug(_ message: String, _ args: CVarArg...) {
-        osLog(message, level: .debug, args)
+        osLog(message, args, level: .debug)
     }
 
     func verbose(_ message: String, _ args: CVarArg...) {
-        osLog(message, level: .default, args)
+        osLog(message, args, level: .default)
     }
 
-    private func osLog(_ message: String, level: OSLogType = .default, _ args: [CVarArg]) {
+    private func osLog(_ message: String, _ args: [CVarArg], level: OSLogType = .default) {
         if !Logger.debugModeEnabled {
             return
         }

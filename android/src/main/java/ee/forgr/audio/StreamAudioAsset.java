@@ -24,8 +24,6 @@ public class StreamAudioAsset extends AudioAsset {
     private float volume;
     private boolean isPrepared = false;
     private final float initialVolume;
-    private static final float FADE_STEP = 0.05f;
-    private static final int FADE_DELAY_MS = 80; // 80ms between steps
     private static final long LIVE_OFFSET_MS = 5000; // 5 seconds behind live
     private final java.util.Map<String, String> headers;
 
@@ -448,7 +446,7 @@ public class StreamAudioAsset extends AudioAsset {
                 @Override
                 public void run() {
                     if (player.isPlaying()) {
-                        fadeIn(volume);
+                        fadeIn(fadeInDurationMs, volume);
                     } else if (attempts < 10) {
                         // Try for 5 seconds (10 * 500ms)
                         attempts++;
@@ -460,121 +458,161 @@ public class StreamAudioAsset extends AudioAsset {
         );
     }
 
-    private void fadeIn(float targetVolume) {
-        final Handler handler = new Handler(Looper.getMainLooper());
-        final Runnable fadeRunnable = new Runnable() {
-            float currentVolume = 0;
+    private void fadeIn(double fadeInDurationMs, float targetVolume) {
+        cancelFade();
+        fadeState = FadeState.FADE_IN;
 
-            @Override
-            public void run() {
-                if (player != null && player.isPlaying() && currentVolume < targetVolume) {
-                    currentVolume += FADE_STEP;
-                    if (currentVolume > targetVolume) currentVolume = targetVolume;
-                    player.setVolume(currentVolume);
-                    Log.d(TAG, "Fading in: volume = " + currentVolume);
-                    handler.postDelayed(this, FADE_DELAY_MS);
+        final int steps = Math.max(1, (int) (fadeInDurationMs / FADE_DELAY_MS));
+        final float fadeStep = targetVolume / steps;
+
+        fadeTask = fadeExecutor.scheduleWithFixedDelay(
+            new Runnable() {
+                float currentVolume = 0;
+
+                @Override
+                public void run() {
+                    if (fadeState != FadeState.FADE_IN || player == null || !player.isPlaying() || currentVolume >= targetVolume) {
+                        fadeState = FadeState.NONE;
+                        cancelFade();
+                        return;
+                    }
+
+                    final float nextVolume = Math.min(currentVolume + fadeStep, targetVolume);
+                    owner
+                        .getActivity()
+                        .runOnUiThread(() -> {
+                            if (player != null && player.isPlaying()) {
+                                player.setVolume(nextVolume);
+                            }
+                        });
+                    currentVolume = nextVolume;
                 }
-            }
-        };
-        handler.post(fadeRunnable);
+            },
+            0,
+            FADE_DELAY_MS,
+            java.util.concurrent.TimeUnit.MILLISECONDS
+        );
     }
 
     private void fadeTo(double fadeDurationMs, float targetVolume) {
-        final Handler handler = new Handler(Looper.getMainLooper());
+        cancelFade();
+        fadeState = FadeState.FADE_TO;
+
+        if (player == null) return;
+
         final int steps = Math.max(1, (int) (fadeDurationMs / FADE_DELAY_MS));
-        final float startVolume = player.getVolume();
-        final float delta = (targetVolume - startVolume) / steps;
+        final float minVolume = zeroVolume;
+        final float initialVolume = Math.max(player.getVolume(), minVolume);
+        final float finalTargetVolume = Math.max(targetVolume, minVolume);
+        final double ratio = Math.pow(finalTargetVolume / initialVolume, 1.0 / steps);
 
-        final Runnable fadeRunnable = new Runnable() {
-            int step = 0;
+        fadeTask = fadeExecutor.scheduleWithFixedDelay(
+            new Runnable() {
+                int currentStep = 0;
+                float currentVolume = initialVolume;
 
-            @Override
-            public void run() {
-                if (player == null || !player.isPlaying() || step >= steps) {
-                    if (player != null) {
-                        player.setVolume(targetVolume);
+                @Override
+                public void run() {
+                    if (fadeState != FadeState.FADE_TO || player == null || !player.isPlaying() || currentStep >= steps) {
+                        fadeState = FadeState.NONE;
+                        cancelFade();
+                        return;
                     }
-                    return;
+
+                    currentVolume *= (float) ratio;
+                    final float nextVolume = Math.min(Math.max(currentVolume, minVolume), maxVolume);
+                    owner
+                        .getActivity()
+                        .runOnUiThread(() -> {
+                            if (player != null && player.isPlaying()) {
+                                player.setVolume(nextVolume);
+                            }
+                        });
+                    currentStep++;
                 }
-
-                float nextVolume = startVolume + (delta * step);
-                player.setVolume(Math.max(0f, Math.min(1f, nextVolume)));
-                step++;
-                handler.postDelayed(this, FADE_DELAY_MS);
-            }
-        };
-
-        handler.post(fadeRunnable);
+            },
+            0,
+            FADE_DELAY_MS,
+            java.util.concurrent.TimeUnit.MILLISECONDS
+        );
     }
 
     @Override
-    public void stopWithFade() throws Exception {
+    public void stopWithFade(double fadeOutDurationMs, boolean toPause) throws Exception {
         owner
             .getActivity()
             .runOnUiThread(() -> {
-                if (player.isPlaying()) {
-                    fadeOut();
+                if (player != null && player.isPlaying()) {
+                    fadeOut(fadeOutDurationMs, toPause);
+                } else if (!toPause) {
+                    try {
+                        stop();
+                    } catch (Exception e) {
+                        logger.error("Error stopping stream asset", e);
+                    }
                 }
             });
     }
 
-    private void fadeOut() {
-        final Handler handler = new Handler(Looper.getMainLooper());
-        final Runnable fadeRunnable = new Runnable() {
-            float currentVolume = player.getVolume();
+    @Override
+    public void stopWithFade() throws Exception {
+        stopWithFade(DEFAULT_FADE_DURATION_MS, false);
+    }
 
-            @Override
-            public void run() {
-                if (currentVolume > FADE_STEP) {
-                    currentVolume -= FADE_STEP;
-                    player.setVolume(currentVolume);
-                    Log.d(TAG, "Fading out: volume = " + currentVolume);
-                    handler.postDelayed(this, FADE_DELAY_MS);
-                } else {
-                    player.setVolume(0);
-                    // Stop and reset player
-                    player.stop();
-                    player.clearMediaItems();
-                    isPrepared = false;
+    private void fadeOut(double fadeOutDurationMs, boolean toPause) {
+        cancelFade();
+        fadeState = FadeState.FADE_OUT;
 
-                    // Create new media source
-                    DefaultHttpDataSource.Factory httpDataSourceFactory = new DefaultHttpDataSource.Factory()
-                        .setAllowCrossProtocolRedirects(true)
-                        .setConnectTimeoutMs(15000)
-                        .setReadTimeoutMs(15000)
-                        .setUserAgent("ExoPlayer");
+        if (player == null) return;
 
-                    // Add custom headers if provided
-                    if (headers != null && !headers.isEmpty()) {
-                        httpDataSourceFactory.setDefaultRequestProperties(headers);
+        final int steps = Math.max(1, (int) (fadeOutDurationMs / FADE_DELAY_MS));
+        final float initialVolume = player.getVolume();
+        final float fadeStep = initialVolume / steps;
+
+        fadeTask = fadeExecutor.scheduleWithFixedDelay(
+            new Runnable() {
+                float currentVolume = initialVolume;
+
+                @Override
+                public void run() {
+                    if (fadeState != FadeState.FADE_OUT || player == null || currentVolume <= 0) {
+                        fadeState = FadeState.NONE;
+                        cancelFade();
+                        owner
+                            .getActivity()
+                            .runOnUiThread(() -> {
+                                if (player == null) {
+                                    return;
+                                }
+                                if (toPause) {
+                                    player.setPlayWhenReady(false);
+                                    stopCurrentTimeUpdates();
+                                } else {
+                                    try {
+                                        stop();
+                                    } catch (Exception e) {
+                                        logger.error("Error stopping stream asset after fade out", e);
+                                    }
+                                }
+                            });
+                        return;
                     }
 
-                    HlsMediaSource mediaSource = new HlsMediaSource.Factory(httpDataSourceFactory)
-                        .setAllowChunklessPreparation(true)
-                        .setTimestampAdjusterInitializationTimeoutMs(LIVE_OFFSET_MS)
-                        .createMediaSource(MediaItem.fromUri(uri));
-
-                    // Set new media source and prepare
-                    player.setMediaSource(mediaSource);
-                    player.prepare();
-
-                    // Add listener for preparation completion
-                    player.addListener(
-                        new Player.Listener() {
-                            @Override
-                            public void onPlaybackStateChanged(int state) {
-                                Log.d(TAG, "Fade-stop state changed to: " + getStateString(state));
-                                if (state == Player.STATE_READY) {
-                                    isPrepared = true;
-                                    player.removeListener(this);
-                                }
+                    final float nextVolume = Math.max(currentVolume - fadeStep, 0f);
+                    owner
+                        .getActivity()
+                        .runOnUiThread(() -> {
+                            if (player != null) {
+                                player.setVolume(nextVolume);
                             }
-                        }
-                    );
+                        });
+                    currentVolume = nextVolume;
                 }
-            }
-        };
-        handler.post(fadeRunnable);
+            },
+            0,
+            FADE_DELAY_MS,
+            java.util.concurrent.TimeUnit.MILLISECONDS
+        );
     }
 
     @Override

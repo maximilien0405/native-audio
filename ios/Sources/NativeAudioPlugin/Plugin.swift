@@ -49,6 +49,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
     private let queueKey = DispatchSpecificKey<Bool>()
+    /// Set while executing a block on the audio queue so getAudioAsset/endSession can avoid reentrant sync (deadlock).
+    private let audioQueueContextKey = DispatchSpecificKey<Bool?>()
     var session = AVAudioSession.sharedInstance()
 
     // Track if audio session has been initialized
@@ -187,7 +189,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
                 if !asset.isPlaying() {
                     asset.resume()
-                    self.updatePlaybackState(isPlaying: true)
+                    self.updateNowPlayingInfo(audioId: assetId, audioAsset: asset)
                 }
             }
             return .success
@@ -222,9 +224,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                 }
 
                 asset.stop()
-                self.clearNowPlayingInfo()
                 self.currentlyPlayingAssetId = nil
-                self.updatePlaybackState(isPlaying: false)
             }
             return .success
         }
@@ -245,7 +245,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                     self.updatePlaybackState(isPlaying: false)
                 } else {
                     asset.resume()
-                    self.updatePlaybackState(isPlaying: true)
+                    self.updateNowPlayingInfo(audioId: assetId, audioAsset: asset)
                 }
             }
             return .success
@@ -273,7 +273,11 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         let focus = call.getBool(Constant.FocusAudio) ?? false
         let background = call.getBool(Constant.Background) ?? false
         let ignoreSilent = call.getBool(Constant.IgnoreSilent) ?? true
-        self.showNotification = call.getBool(Constant.ShowNotification) ?? false
+        // Only update showNotification when explicitly provided so repeated configure() calls
+        // (e.g. when switching assets) don't reset it to false and break Now Playing for the next play
+        if let showNotification = call.getBool(Constant.ShowNotification) {
+            self.showNotification = showNotification
+        }
 
         logger.info("Configuring audio session with focus=%@ background=%@ ignoreSilent=%@", "\(focus)", "\(background)", "\(ignoreSilent)")
 
@@ -415,9 +419,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                 self.playOnceAssets.remove(assetId)
                 self.notificationMetadataMap.removeValue(forKey: assetId)
 
-                // Clear notification if this was the currently playing asset
+                // Reset current track if this was the currently playing asset (next play will overwrite Now Playing)
                 if self.currentlyPlayingAssetId == assetId {
-                    self.clearNowPlayingInfo()
                     self.currentlyPlayingAssetId = nil
                 }
 
@@ -605,13 +608,23 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     func endSession() {
         do {
-            // Check if any audio assets are still playing before deactivating
-            let hasPlayingAssets = audioQueue.sync {
-                return self.audioList.values.contains { asset in
+            // Avoid reentrant sync when already on audio queue (e.g. from pause()) to prevent deadlock
+            let hasPlayingAssets: Bool
+            if DispatchQueue.getSpecific(key: audioQueueContextKey) == true {
+                hasPlayingAssets = self.audioList.values.contains { asset in
                     if let audioAsset = asset as? AudioAsset {
                         return audioAsset.isPlaying()
                     }
                     return false
+                }
+            } else {
+                hasPlayingAssets = audioQueue.sync {
+                    return self.audioList.values.contains { asset in
+                        if let audioAsset = asset as? AudioAsset {
+                            return audioAsset.isPlaying()
+                        }
+                        return false
+                    }
                 }
             }
 
@@ -727,16 +740,21 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     }
 
     @objc private func getAudioAsset(_ call: CAPPluginCall) -> AudioAsset? {
+        // Avoid reentrant sync when already on audio queue (e.g. from pause()) to prevent deadlock
+        if DispatchQueue.getSpecific(key: audioQueueContextKey) == true {
+            return self.audioList[call.getString(Constant.AssetIdKey) ?? ""] as? AudioAsset
+        }
         var asset: AudioAsset?
-        audioQueue.sync { // Read operations should use sync
+        audioQueue.sync {
             asset = self.audioList[call.getString(Constant.AssetIdKey) ?? ""] as? AudioAsset
         }
         return asset
     }
 
     @objc func setCurrentTime(_ call: CAPPluginCall) {
-        // Consistent use of audioQueue.sync for all operations
         audioQueue.sync {
+            self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: true)
+            defer { self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: nil) }
             guard let audioAsset: AudioAsset = self.getAudioAsset(call) else {
                 call.reject("Failed to get audio asset")
                 return
@@ -752,6 +770,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     @objc func getDuration(_ call: CAPPluginCall) {
         audioQueue.sync {
+            self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: true)
+            defer { self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: nil) }
             guard let audioAsset: AudioAsset = self.getAudioAsset(call) else {
                 call.reject("Failed to get audio asset")
                 return
@@ -765,6 +785,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     @objc func getCurrentTime(_ call: CAPPluginCall) {
         audioQueue.sync {
+            self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: true)
+            defer { self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: nil) }
             guard let audioAsset: AudioAsset = self.getAudioAsset(call) else {
                 call.reject("Failed to get audio asset")
                 return
@@ -777,7 +799,10 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     }
 
     @objc func resume(_ call: CAPPluginCall) {
+        let audioId = call.getString(Constant.AssetIdKey) ?? ""
         audioQueue.sync {
+            self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: true)
+            defer { self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: nil) }
             guard let audioAsset: AudioAsset = self.getAudioAsset(call) else {
                 call.reject("Failed to get audio asset")
                 return
@@ -807,7 +832,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
             // Update notification when resumed
             if self.showNotification {
-                self.updatePlaybackState(isPlaying: true)
+                self.updateNowPlayingInfo(audioId: audioId, audioAsset: audioAsset)
             }
 
             call.resolve()
@@ -816,6 +841,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     @objc func pause(_ call: CAPPluginCall) {
         audioQueue.sync {
+            self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: true)
+            defer { self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: nil) }
             guard let audioAsset: AudioAsset = self.getAudioAsset(call) else {
                 call.reject("Failed to get audio asset")
                 return
@@ -853,6 +880,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         let fadeOutDuration = call.getDouble(Constant.FadeOutDuration) ?? Double(Constant.DefaultFadeDuration)
 
         audioQueue.sync {
+            self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: true)
+            defer { self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: nil) }
             guard !self.audioList.isEmpty else {
                 call.reject("Audio list is empty")
                 return
@@ -861,9 +890,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             do {
                 try self.stopAudio(audioId: audioId, fadeOut: fadeOut, fadeOutDuration: fadeOutDuration)
 
-                // Clear notification when stopped
+                // Reset current track so next play will overwrite Now Playing (don't clear here to avoid race with play another)
                 if self.showNotification {
-                    self.clearNowPlayingInfo()
                     self.currentlyPlayingAssetId = nil
                 }
 
@@ -883,6 +911,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     @objc func loop(_ call: CAPPluginCall) {
         audioQueue.sync {
+            self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: true)
+            defer { self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: nil) }
             guard let audioAsset: AudioAsset = self.getAudioAsset(call) else {
                 call.reject("Failed to get audio asset")
                 return
@@ -908,6 +938,11 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             if let asset = self.audioList[audioId] as? AudioAsset {
                 asset.unload()
                 self.audioList[audioId] = nil
+
+                // Reset current track if this was the currently playing asset (next play will overwrite Now Playing)
+                if self.showNotification && self.currentlyPlayingAssetId == audioId {
+                    self.currentlyPlayingAssetId = nil
+                }
 
                 // Clean up playOnce tracking if this was a playOnce asset
                 if self.playOnceAssets.contains(audioId) {
@@ -936,6 +971,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     @objc func setVolume(_ call: CAPPluginCall) {
         audioQueue.sync {
+            self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: true)
+            defer { self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: nil) }
             guard let audioAsset: AudioAsset = self.getAudioAsset(call) else {
                 call.reject("Failed to get audio asset")
                 return
@@ -950,6 +987,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     @objc func setRate(_ call: CAPPluginCall) {
         audioQueue.sync {
+            self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: true)
+            defer { self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: nil) }
             guard let audioAsset: AudioAsset = self.getAudioAsset(call) else {
                 call.reject("Failed to get audio asset")
                 return
@@ -963,6 +1002,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
     @objc func isPlaying(_ call: CAPPluginCall) {
         audioQueue.sync {
+            self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: true)
+            defer { self.audioQueue.setSpecific(key: self.audioQueueContextKey, value: nil) }
             guard let audioAsset: AudioAsset = self.getAudioAsset(call) else {
                 call.reject("Failed to get audio asset")
                 return
@@ -1320,6 +1361,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
+    /// Clears the Now Playing info. Only used when tearing down (deinit); stop/unload do not clear
+    /// so that the next play can overwrite the notification without a race.
     private func clearNowPlayingInfo() {
         DispatchQueue.main.async {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil

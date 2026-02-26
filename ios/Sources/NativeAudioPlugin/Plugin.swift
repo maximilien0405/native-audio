@@ -890,8 +890,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             do {
                 try self.stopAudio(audioId: audioId, fadeOut: fadeOut, fadeOutDuration: fadeOutDuration)
 
-                // Reset current track so next play will overwrite Now Playing (don't clear here to avoid race with play another)
-                if self.showNotification {
+                // Reset current track when stopping the asset that was playing (internal state, not just for notifications)
+                if self.currentlyPlayingAssetId == audioId {
                     self.currentlyPlayingAssetId = nil
                 }
 
@@ -939,8 +939,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                 asset.unload()
                 self.audioList[audioId] = nil
 
-                // Reset current track if this was the currently playing asset (next play will overwrite Now Playing)
-                if self.showNotification && self.currentlyPlayingAssetId == audioId {
+                // Reset current track if this was the currently playing asset (internal state tracking)
+                if self.currentlyPlayingAssetId == audioId {
                     self.currentlyPlayingAssetId = nil
                 }
 

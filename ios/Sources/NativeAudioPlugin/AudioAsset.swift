@@ -113,10 +113,9 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
 
     func getCurrentTime() -> TimeInterval {
         var result: TimeInterval = 0
-        owner?.executeOnAudioQueue { [weak self] in
-            guard let self else { return }
-            guard !channels.isEmpty, playIndex < channels.count else { return }
-            result = channels[playIndex].currentTime
+        owner?.readOnAudioQueue {
+            guard !self.channels.isEmpty, self.playIndex < self.channels.count else { return }
+            result = self.channels[self.playIndex].currentTime
         }
         return result
     }
@@ -313,9 +312,8 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
 
     func isPlaying() -> Bool {
         var result = false
-        owner?.executeOnAudioQueue { [weak self] in
-            guard let self else { return }
-            result = channels.contains(where: { $0.isPlaying })
+        owner?.readOnAudioQueue {
+            result = self.channels.contains(where: { $0.isPlaying })
         }
         return result
     }

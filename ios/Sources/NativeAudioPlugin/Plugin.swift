@@ -630,10 +630,19 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
 
             // Only deactivate if no assets are playing AND no other audio is active,
             // and only when we're not in a record-capable mode (e.g. usage with CameraPreview plugin).
+            let isRecordCapableCategory: Bool = {
+                switch session.category {
+                case .record, .playAndRecord, .multiRoute:
+                    return true
+                default:
+                    return false
+                }
+            }()
+
             if !hasPlayingAssets &&
                !session.isOtherAudioPlaying &&
                session.secondaryAudioShouldBeSilencedHint == false &&
-               session.category != .playAndRecord {
+               !isRecordCapableCategory {
                 try self.session.setActive(false, options: .notifyOthersOnDeactivation)
             }
         } catch {

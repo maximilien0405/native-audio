@@ -628,9 +628,12 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                 }
             }
 
-            // Only deactivate if no assets are playing AND no other audio is active
-            // This prevents interfering with VoIP calls or other audio sessions
-            if !hasPlayingAssets && !session.isOtherAudioPlaying && session.secondaryAudioShouldBeSilencedHint == false {
+            // Only deactivate if no assets are playing AND no other audio is active,
+            // and only when we're not in a record-capable mode (e.g. usage with CameraPreview plugin).
+            if !hasPlayingAssets &&
+               !session.isOtherAudioPlaying &&
+               session.secondaryAudioShouldBeSilencedHint == false &&
+               session.category != .playAndRecord {
                 try self.session.setActive(false, options: .notifyOthersOnDeactivation)
             }
         } catch {

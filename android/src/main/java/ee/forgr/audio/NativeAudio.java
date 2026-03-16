@@ -1215,11 +1215,11 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
 
         PlaybackStateCompat.Builder stateBuilder = new PlaybackStateCompat.Builder().setActions(
             PlaybackStateCompat.ACTION_PLAY |
-            PlaybackStateCompat.ACTION_PAUSE |
-            PlaybackStateCompat.ACTION_STOP |
-            PlaybackStateCompat.ACTION_REWIND |
-            PlaybackStateCompat.ACTION_FAST_FORWARD |
-            PlaybackStateCompat.ACTION_SEEK_TO
+                PlaybackStateCompat.ACTION_PAUSE |
+                PlaybackStateCompat.ACTION_STOP |
+                PlaybackStateCompat.ACTION_REWIND |
+                PlaybackStateCompat.ACTION_FAST_FORWARD |
+                PlaybackStateCompat.ACTION_SEEK_TO
         );
         mediaSession.setPlaybackState(stateBuilder.build());
 
@@ -1453,11 +1453,11 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             .setState(state, 0, state == PlaybackStateCompat.STATE_PLAYING ? 1.0f : 0.0f)
             .setActions(
                 PlaybackStateCompat.ACTION_PLAY |
-                PlaybackStateCompat.ACTION_PAUSE |
-                PlaybackStateCompat.ACTION_STOP |
-                PlaybackStateCompat.ACTION_REWIND |
-                PlaybackStateCompat.ACTION_FAST_FORWARD |
-                PlaybackStateCompat.ACTION_SEEK_TO
+                    PlaybackStateCompat.ACTION_PAUSE |
+                    PlaybackStateCompat.ACTION_STOP |
+                    PlaybackStateCompat.ACTION_REWIND |
+                    PlaybackStateCompat.ACTION_FAST_FORWARD |
+                    PlaybackStateCompat.ACTION_SEEK_TO
             );
         mediaSession.setPlaybackState(stateBuilder.build());
     }

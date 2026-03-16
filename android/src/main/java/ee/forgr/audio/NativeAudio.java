@@ -1,4 +1,3 @@
-
 package ee.forgr.audio;
 
 import static ee.forgr.audio.Constant.ASSET_ID;
@@ -1495,4 +1494,3 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         void onArtworkLoaded(Bitmap bitmap);
     }
 }
-

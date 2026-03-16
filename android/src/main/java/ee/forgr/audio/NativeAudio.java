@@ -18,9 +18,7 @@ import static ee.forgr.audio.Constant.VOLUME;
 import android.Manifest;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.Context;
-import android.content.Intent;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
@@ -35,7 +33,6 @@ import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 import android.util.Log;
-import android.view.KeyEvent;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.media3.common.util.UnstableApi;
@@ -1391,57 +1388,52 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
         }
 
         // Build notification with proper action order: Rewind, Play/Pause, Fast Forward
-        // The MediaStyle will automatically wire these to the MediaSession callbacks
+        // Use MediaButtonReceiver to properly wire actions to MediaSession callbacks
         NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(getContext(), CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(title)
             .setContentText(artist)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .addAction(android.R.drawable.ic_media_rew, "Rewind 15 seconds", createMediaButtonPendingIntent(PlaybackStateCompat.ACTION_REWIND))
-            .addAction(
-                isPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play,
-                isPlaying ? "Pause" : "Play",
-                createMediaButtonPendingIntent(isPlaying ? PlaybackStateCompat.ACTION_PAUSE : PlaybackStateCompat.ACTION_PLAY)
-            )
-            .addAction(android.R.drawable.ic_media_ff, "Fast forward 15 seconds", createMediaButtonPendingIntent(PlaybackStateCompat.ACTION_FAST_FORWARD))
             .setStyle(
                 new androidx.media.app.NotificationCompat.MediaStyle()
                     .setMediaSession(mediaSession.getSessionToken())
                     .setShowActionsInCompactView(0, 1, 2)
+            )
+            .addAction(
+                new NotificationCompat.Action.Builder(
+                    android.R.drawable.ic_media_rew,
+                    "Rewind 15 seconds",
+                    androidx.media.session.MediaButtonReceiver.buildMediaButtonPendingIntent(
+                        getContext(),
+                        PlaybackStateCompat.ACTION_REWIND
+                    )
+                ).build()
+            )
+            .addAction(
+                new NotificationCompat.Action.Builder(
+                    isPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play,
+                    isPlaying ? "Pause" : "Play",
+                    androidx.media.session.MediaButtonReceiver.buildMediaButtonPendingIntent(
+                        getContext(),
+                        isPlaying ? PlaybackStateCompat.ACTION_PAUSE : PlaybackStateCompat.ACTION_PLAY
+                    )
+                ).build()
+            )
+            .addAction(
+                new NotificationCompat.Action.Builder(
+                    android.R.drawable.ic_media_ff,
+                    "Fast forward 15 seconds",
+                    androidx.media.session.MediaButtonReceiver.buildMediaButtonPendingIntent(
+                        getContext(),
+                        PlaybackStateCompat.ACTION_FAST_FORWARD
+                    )
+                ).build()
             )
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOnlyAlertOnce(true);
 
         NotificationManagerCompat notificationManager = NotificationManagerCompat.from(getContext());
         notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
-    }
-
-    private PendingIntent createMediaButtonPendingIntent(long action) {
-        Intent intent = new Intent(Intent.ACTION_MEDIA_BUTTON);
-        intent.setPackage(getContext().getPackageName());
-        
-        // Create a key event for the action
-        KeyEvent keyEvent = null;
-        if (action == PlaybackStateCompat.ACTION_PLAY) {
-            keyEvent = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY);
-        } else if (action == PlaybackStateCompat.ACTION_PAUSE) {
-            keyEvent = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PAUSE);
-        } else if (action == PlaybackStateCompat.ACTION_REWIND) {
-            keyEvent = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_REWIND);
-        } else if (action == PlaybackStateCompat.ACTION_FAST_FORWARD) {
-            keyEvent = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_FAST_FORWARD);
-        }
-        
-        if (keyEvent != null) {
-            intent.putExtra(Intent.EXTRA_KEY_EVENT, keyEvent);
-        }
-        
-        return PendingIntent.getBroadcast(
-            getContext(),
-            (int) action,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
     }
 
     private void clearNotification() {

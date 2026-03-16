@@ -1279,6 +1279,15 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
+    /// Use this for read-only access to shared state — avoids the .barrier write lock
+    /// that `executeOnAudioQueue` applies, preventing deadlocks with third-party SDKs.
+    internal func readOnAudioQueue<T>(_ block: () -> T) -> T {
+        if DispatchQueue.getSpecific(key: queueKey) != nil {
+            return block()
+        }
+        return audioQueue.sync { block() }
+    }
+
     @objc func notifyCurrentTime(_ asset: AudioAsset) {
         audioQueue.sync {
             let rawTime = asset.getCurrentTime()

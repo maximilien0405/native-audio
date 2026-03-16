@@ -1394,11 +1394,7 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
             .setContentTitle(title)
             .setContentText(artist)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setStyle(
-                new androidx.media.app.NotificationCompat.MediaStyle()
-                    .setMediaSession(mediaSession.getSessionToken())
-                    .setShowActionsInCompactView(0, 1, 2)
-            )
+            // Add actions BEFORE setStyle() for proper wiring
             .addAction(
                 new NotificationCompat.Action.Builder(
                     android.R.drawable.ic_media_rew,
@@ -1428,6 +1424,11 @@ public class NativeAudio extends Plugin implements AudioManager.OnAudioFocusChan
                         PlaybackStateCompat.ACTION_FAST_FORWARD
                     )
                 ).build()
+            )
+            .setStyle(
+                new androidx.media.app.NotificationCompat.MediaStyle()
+                    .setMediaSession(mediaSession.getSessionToken())
+                    .setShowActionsInCompactView(0, 1, 2)
             )
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOnlyAlertOnce(true);

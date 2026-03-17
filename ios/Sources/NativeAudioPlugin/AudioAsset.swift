@@ -318,6 +318,10 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
         return result
     }
 
+    internal func shouldStopCurrentTimeUpdatesWhenNotPlaying() -> Bool {
+        true
+    }
+
     public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         owner?.executeOnAudioQueue { [weak self] in
             guard let self else { return }
@@ -345,7 +349,7 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
                 }
                 if self.isPlaying() {
                     owner.notifyCurrentTime(self)
-                } else {
+                } else if self.shouldStopCurrentTimeUpdatesWhenNotPlaying() {
                     self.stopCurrentTimeUpdates()
                 }
             }

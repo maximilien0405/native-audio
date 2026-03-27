@@ -15,6 +15,37 @@ extension AudioAsset {
         fadeTask = nil
     }
 
+    fileprivate func performLocalFadeOutPauseOnMain(audio: AVAudioPlayer, beforePause: ((TimeInterval, TimeInterval) -> Void)?) {
+        let elapsed = audio.currentTime
+        let duration = audio.duration.isFinite ? audio.duration : 0
+        beforePause?(elapsed, duration)
+        audio.pause()
+    }
+
+    fileprivate func scheduleLocalFadeOutPauseOnMain(audio: AVAudioPlayer, beforePause: ((TimeInterval, TimeInterval) -> Void)?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.performLocalFadeOutPauseOnMain(audio: audio, beforePause: beforePause)
+        }
+    }
+
+    /// Same main-thread pause and `beforePause(elapsed, duration)` as fade-out-to-pause when no fade runs (e.g. volume already zero).
+    internal func schedulePauseWithPositionRecording(audio: AVAudioPlayer, beforePause: ((TimeInterval, TimeInterval) -> Void)?) {
+        scheduleLocalFadeOutPauseOnMain(audio: audio, beforePause: beforePause)
+    }
+
+    fileprivate func scheduleLocalFadeOutStopOnMain(audio: AVAudioPlayer) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.performLocalFadeOutStopOnMain(audio: audio)
+        }
+    }
+
+    fileprivate func performLocalFadeOutStopOnMain(audio: AVAudioPlayer) {
+        audio.stop()
+        dispatchComplete()
+    }
+
     func fadeIn(audio: AVAudioPlayer, fadeInDuration: TimeInterval, targetVolume: Float) {
         cancelFade()
         let steps = Int(fadeInDuration / TimeInterval(fadeDelaySecs))
@@ -40,10 +71,24 @@ extension AudioAsset {
         }
     }
 
-    func fadeOut(audio: AVAudioPlayer, fadeOutDuration: TimeInterval, toPause: Bool = false) {
+    /// - Parameter beforePause: Called on the main queue immediately before `pause()` when `toPause` is true,
+    ///   so the plugin can persist `timeBeforePause` and update Now Playing at the actual stop position.
+    func fadeOut(
+        audio: AVAudioPlayer,
+        fadeOutDuration: TimeInterval,
+        toPause: Bool = false,
+        beforePause: ((TimeInterval, TimeInterval) -> Void)? = nil
+    ) {
         cancelFade()
         let steps = Int(fadeOutDuration / TimeInterval(fadeDelaySecs))
-        guard steps > 0 else { return }
+        guard steps > 0 else {
+            if toPause {
+                scheduleLocalFadeOutPauseOnMain(audio: audio, beforePause: beforePause)
+            } else {
+                scheduleLocalFadeOutStopOnMain(audio: audio)
+            }
+            return
+        }
         var currentVolume = audio.volume
         let fadeStep = currentVolume / Float(steps)
 
@@ -61,10 +106,9 @@ extension AudioAsset {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 if toPause {
-                    audio.pause()
+                    self.performLocalFadeOutPauseOnMain(audio: audio, beforePause: beforePause)
                 } else {
-                    audio.stop()
-                    self.dispatchComplete()
+                    self.performLocalFadeOutStopOnMain(audio: audio)
                 }
             }
         }

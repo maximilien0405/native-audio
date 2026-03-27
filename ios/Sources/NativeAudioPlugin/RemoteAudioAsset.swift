@@ -132,10 +132,23 @@ public class RemoteAudioAsset: AudioAsset {
         }
     }
 
-    override func setCurrentTime(time: TimeInterval) {
-        owner?.executeOnAudioQueue { [weak self] in
-            guard let self else { return }
-            guard !players.isEmpty && playIndex < players.count else { return }
+    /// Timescale for seek targets; 600 is a common media default and avoids coarse rounding from timescale 1.
+    private static let seekPreferredTimescale: CMTimeScale = 600
+
+    override func setCurrentTime(time: TimeInterval, completion: (() -> Void)? = nil) {
+        guard let owner else {
+            completion?()
+            return
+        }
+        owner.executeOnAudioQueue { [weak self] in
+            guard let self else {
+                completion?()
+                return
+            }
+            guard !players.isEmpty && playIndex < players.count else {
+                completion?()
+                return
+            }
             let player = players[playIndex]
             let lowerBound = max(time, 0)
             let validTime: TimeInterval
@@ -154,7 +167,10 @@ public class RemoteAudioAsset: AudioAsset {
             } else {
                 validTime = lowerBound
             }
-            player.seek(to: CMTimeMakeWithSeconds(validTime, preferredTimescale: 1))
+            let target = CMTime(seconds: validTime, preferredTimescale: Self.seekPreferredTimescale)
+            player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                completion?()
+            }
         }
     }
 

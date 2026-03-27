@@ -188,14 +188,26 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                 }
 
                 if !asset.isPlaying() {
+                    var restoredTime: TimeInterval?
                     if var data = self.audioAssetData[assetId],
                        let time = data["timeBeforePause"] as? TimeInterval {
-                        asset.setCurrentTime(time: time)
+                        restoredTime = time
                         data.removeValue(forKey: "timeBeforePause")
                         self.audioAssetData[assetId] = data
                     }
-                    asset.resume()
-                    self.updateNowPlayingInfo(audioId: assetId, audioAsset: asset)
+                    let resumeAfterSeek: () -> Void = { [weak self] in
+                        guard let self else { return }
+                        asset.resume()
+                        self.updateNowPlayingInfo(audioId: assetId, audioAsset: asset)
+                    }
+                    if let t = restoredTime {
+                        asset.setCurrentTime(time: t) { [weak self] in
+                            guard let self else { return }
+                            self.audioQueue.async(flags: .barrier, execute: resumeAfterSeek)
+                        }
+                    } else {
+                        resumeAfterSeek()
+                    }
                 }
             }
             return .success
@@ -262,15 +274,26 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                     asset.pause()
                     self.updatePlaybackState(isPlaying: false, elapsedTime: timeBeforePause, duration: asset.getDuration())
                 } else {
-                    // Restore the paused position for smoother iOS lock-screen preview resume.
+                    var restoredTime: TimeInterval?
                     if var data = self.audioAssetData[assetId],
                        let time = data["timeBeforePause"] as? TimeInterval {
-                        asset.setCurrentTime(time: time)
+                        restoredTime = time
                         data.removeValue(forKey: "timeBeforePause")
                         self.audioAssetData[assetId] = data
                     }
-                    asset.resume()
-                    self.updateNowPlayingInfo(audioId: assetId, audioAsset: asset)
+                    let resumeAfterSeek: () -> Void = { [weak self] in
+                        guard let self else { return }
+                        asset.resume()
+                        self.updateNowPlayingInfo(audioId: assetId, audioAsset: asset)
+                    }
+                    if let t = restoredTime {
+                        asset.setCurrentTime(time: t) { [weak self] in
+                            guard let self else { return }
+                            self.audioQueue.async(flags: .barrier, execute: resumeAfterSeek)
+                        }
+                    } else {
+                        resumeAfterSeek()
+                    }
                 }
             }
             return .success
@@ -816,8 +839,9 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             cancelPendingPlay(for: audioAsset.assetId)
             clearAudioAssetData(for: audioAsset.assetId)
             let time = max(call.getDouble(Constant.Time) ?? 0, 0)
-            audioAsset.setCurrentTime(time: time)
-            call.resolve()
+            audioAsset.setCurrentTime(time: time) {
+                call.resolve()
+            }
         }
     }
 
@@ -865,40 +889,49 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             let fadeInDuration = call.getDouble(Constant.FadeInDuration) ?? Double(Constant.DefaultFadeDuration)
             var restoredVolume: Float?
 
-            // Restore paused playback position when available (avoids lock-screen jumps).
-            if let data = audioAssetData[audioAsset.assetId],
+            var restoredTime: TimeInterval?
+            if var data = audioAssetData[audioAsset.assetId],
                let time = data["timeBeforePause"] as? TimeInterval {
-                audioAsset.setCurrentTime(time: time)
-                var mutableData = data
-                mutableData.removeValue(forKey: "timeBeforePause")
-                audioAssetData[audioAsset.assetId] = mutableData
+                restoredTime = time
+                data.removeValue(forKey: "timeBeforePause")
+                audioAssetData[audioAsset.assetId] = data
             }
 
             if let data = audioAssetData[audioAsset.assetId], let volume = data["volumeBeforePause"] as? Float {
                 restoredVolume = volume
             }
-            if fadeIn {
-                let targetVolume = restoredVolume ?? (audioAsset.channels.first?.volume ?? audioAsset.initialVolume)
-                audioAsset.setVolume(volume: 0, fadeDuration: 0)
-                audioAsset.resume()
-                audioAsset.setVolume(volume: NSNumber(value: targetVolume), fadeDuration: fadeInDuration)
-            } else {
-                if let volume = restoredVolume {
-                    audioAsset.setVolume(volume: NSNumber(value: volume), fadeDuration: 0)
+
+            let finishResume: () -> Void = { [weak self] in
+                guard let self else { return }
+                if fadeIn {
+                    let targetVolume = restoredVolume ?? (audioAsset.channels.first?.volume ?? audioAsset.initialVolume)
+                    audioAsset.setVolume(volume: 0, fadeDuration: 0)
+                    audioAsset.resume()
+                    audioAsset.setVolume(volume: NSNumber(value: targetVolume), fadeDuration: fadeInDuration)
+                } else {
+                    if let volume = restoredVolume {
+                        audioAsset.setVolume(volume: NSNumber(value: volume), fadeDuration: 0)
+                    }
+                    audioAsset.resume()
                 }
-                audioAsset.resume()
-            }
-            if var data = audioAssetData[audioAsset.assetId] {
-                data.removeValue(forKey: "volumeBeforePause")
-                audioAssetData[audioAsset.assetId] = data
-            }
-
-            // Update notification when resumed
-            if self.showNotification {
-                self.updateNowPlayingInfo(audioId: audioId, audioAsset: audioAsset)
+                if var data = self.audioAssetData[audioAsset.assetId] {
+                    data.removeValue(forKey: "volumeBeforePause")
+                    self.audioAssetData[audioAsset.assetId] = data
+                }
+                if self.showNotification {
+                    self.updateNowPlayingInfo(audioId: audioId, audioAsset: audioAsset)
+                }
+                call.resolve()
             }
 
-            call.resolve()
+            if let t = restoredTime {
+                audioAsset.setCurrentTime(time: t) { [weak self] in
+                    guard let self else { return }
+                    self.audioQueue.async(flags: .barrier, execute: finishResume)
+                }
+            } else {
+                finishResume()
+            }
         }
     }
 
@@ -1439,11 +1472,16 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                             guard let self = self else { return }
                             guard self.currentlyPlayingAssetId == targetAudioId else { return }
 
-                            DispatchQueue.main.async {
-                                nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in
-                                    return image
+                            DispatchQueue.main.async { [weak self] in
+                                guard let self = self else { return }
+                                let stillCurrent = self.audioQueue.sync { self.currentlyPlayingAssetId == targetAudioId }
+                                guard stillCurrent else { return }
+
+                                var merged = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [String: Any]()
+                                merged[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in
+                                    image
                                 }
-                                MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+                                MPNowPlayingInfoCenter.default().nowPlayingInfo = merged
                             }
                         }
                     }

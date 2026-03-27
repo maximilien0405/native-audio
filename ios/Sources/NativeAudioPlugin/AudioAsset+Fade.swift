@@ -52,11 +52,17 @@ extension AudioAsset {
         let steps = Int(fadeOutDuration / TimeInterval(fadeDelaySecs))
         guard steps > 0 else {
             if toPause {
-                let elapsed = audio.currentTime
-                let duration = audio.duration.isFinite ? audio.duration : 0
                 DispatchQueue.main.async {
+                    let elapsed = audio.currentTime
+                    let duration = audio.duration.isFinite ? audio.duration : 0
                     beforePause?(elapsed, duration)
                     audio.pause()
+                }
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    audio.stop()
+                    self.dispatchComplete()
                 }
             }
             return

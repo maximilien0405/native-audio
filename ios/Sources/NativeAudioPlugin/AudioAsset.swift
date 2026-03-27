@@ -120,13 +120,24 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
         return result
     }
 
-    func setCurrentTime(time: TimeInterval) {
-        owner?.executeOnAudioQueue { [weak self] in
-            guard let self else { return }
-            guard !channels.isEmpty, playIndex < channels.count else { return }
+    func setCurrentTime(time: TimeInterval, completion: (() -> Void)? = nil) {
+        guard let owner else {
+            completion?()
+            return
+        }
+        owner.executeOnAudioQueue { [weak self] in
+            guard let self else {
+                completion?()
+                return
+            }
+            guard !channels.isEmpty, playIndex < channels.count else {
+                completion?()
+                return
+            }
             let player = channels[playIndex]
             let validTime = min(max(time, 0), player.duration)
             player.currentTime = validTime
+            completion?()
         }
     }
 

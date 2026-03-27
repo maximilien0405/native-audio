@@ -38,12 +38,23 @@ extension RemoteAudioAsset {
         let steps = Int(fadeOutDuration / TimeInterval(fadeDelaySecs))
         guard steps > 0 else {
             if toPause {
-                let elapsed = player.currentTime().seconds
-                let rawDuration = player.currentItem?.duration ?? .zero
-                let duration = rawDuration.isNumeric && rawDuration.isValid ? rawDuration.seconds : 0
                 DispatchQueue.main.async {
+                    let elapsed = player.currentTime().seconds
+                    let rawDuration = player.currentItem?.duration ?? .zero
+                    let duration = rawDuration.isNumeric && rawDuration.isValid ? rawDuration.seconds : 0
                     beforePause?(elapsed, duration.isFinite ? duration : 0)
                     player.pause()
+                }
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    player.pause()
+                    player.seek(to: .zero) { [weak self] _ in
+                        guard let self else { return }
+                        DispatchQueue.main.async {
+                            self.dispatchComplete()
+                        }
+                    }
                 }
             }
             return
@@ -72,9 +83,12 @@ extension RemoteAudioAsset {
                     player.pause()
                 } else {
                     player.pause()
-                    player.seek(to: .zero)
-                    self.owner?.notifyListeners("complete", data: ["assetId": self.assetId as Any])
-                    self.dispatchedCompleteMap[self.assetId] = true
+                    player.seek(to: .zero) { [weak self] _ in
+                        guard let self else { return }
+                        DispatchQueue.main.async {
+                            self.dispatchComplete()
+                        }
+                    }
                 }
             }
         }

@@ -27,10 +27,27 @@ extension RemoteAudioAsset {
         }
     }
 
-    func fadeOut(player: AVPlayer, fadeOutDuration: TimeInterval, toPause: Bool = false) {
+    /// - Parameter beforePause: Called on the main queue immediately before `pause()` when `toPause` is true.
+    func fadeOut(
+        player: AVPlayer,
+        fadeOutDuration: TimeInterval,
+        toPause: Bool = false,
+        beforePause: ((TimeInterval, TimeInterval) -> Void)? = nil
+    ) {
         cancelFade()
         let steps = Int(fadeOutDuration / TimeInterval(fadeDelaySecs))
-        guard steps > 0 else { return }
+        guard steps > 0 else {
+            if toPause {
+                let elapsed = player.currentTime().seconds
+                let rawDuration = player.currentItem?.duration ?? .zero
+                let duration = rawDuration.isNumeric && rawDuration.isValid ? rawDuration.seconds : 0
+                DispatchQueue.main.async {
+                    beforePause?(elapsed, duration.isFinite ? duration : 0)
+                    player.pause()
+                }
+            }
+            return
+        }
         let fadeStep = player.volume / Float(steps)
         var currentVolume = player.volume
 
@@ -48,6 +65,10 @@ extension RemoteAudioAsset {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 if toPause {
+                    let elapsed = player.currentTime().seconds
+                    let rawDuration = player.currentItem?.duration ?? .zero
+                    let duration = rawDuration.isNumeric && rawDuration.isValid ? rawDuration.seconds : 0
+                    beforePause?(elapsed, duration.isFinite ? duration : 0)
                     player.pause()
                 } else {
                     player.pause()

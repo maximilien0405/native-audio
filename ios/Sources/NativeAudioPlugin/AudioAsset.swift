@@ -248,7 +248,14 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
             }
             let player = channels[playIndex]
             if player.isPlaying && player.volume > 0 {
-                fadeOut(audio: player, fadeOutDuration: fadeOutDuration, toPause: toPause)
+                if toPause {
+                    fadeOut(audio: player, fadeOutDuration: fadeOutDuration, toPause: true) { [weak self] elapsed, duration in
+                        guard let self, let owner = self.owner else { return }
+                        owner.recordPausePositionAfterFade(assetId: self.assetId, elapsedTime: elapsed, duration: duration)
+                    }
+                } else {
+                    fadeOut(audio: player, fadeOutDuration: fadeOutDuration, toPause: false)
+                }
             } else if !toPause {
                 stop()
             }

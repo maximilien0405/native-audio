@@ -40,10 +40,27 @@ extension AudioAsset {
         }
     }
 
-    func fadeOut(audio: AVAudioPlayer, fadeOutDuration: TimeInterval, toPause: Bool = false) {
+    /// - Parameter beforePause: Called on the main queue immediately before `pause()` when `toPause` is true,
+    ///   so the plugin can persist `timeBeforePause` and update Now Playing at the actual stop position.
+    func fadeOut(
+        audio: AVAudioPlayer,
+        fadeOutDuration: TimeInterval,
+        toPause: Bool = false,
+        beforePause: ((TimeInterval, TimeInterval) -> Void)? = nil
+    ) {
         cancelFade()
         let steps = Int(fadeOutDuration / TimeInterval(fadeDelaySecs))
-        guard steps > 0 else { return }
+        guard steps > 0 else {
+            if toPause {
+                let elapsed = audio.currentTime
+                let duration = audio.duration.isFinite ? audio.duration : 0
+                DispatchQueue.main.async {
+                    beforePause?(elapsed, duration)
+                    audio.pause()
+                }
+            }
+            return
+        }
         var currentVolume = audio.volume
         let fadeStep = currentVolume / Float(steps)
 
@@ -61,6 +78,9 @@ extension AudioAsset {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 if toPause {
+                    let elapsed = audio.currentTime
+                    let duration = audio.duration.isFinite ? audio.duration : 0
+                    beforePause?(elapsed, duration)
                     audio.pause()
                 } else {
                     audio.stop()

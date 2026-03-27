@@ -917,7 +917,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             var data = audioAssetData[audioAsset.assetId] ?? [:]
             data["volumeBeforePause"] = currentVolume
 
-            // Only restore exact resume position when we pause immediately (no fade-out timeline).
+            // Without fade: store position now. With fade: `recordPausePositionAfterFade` runs when the fade finishes.
             if !fadeOut {
                 data["timeBeforePause"] = audioAsset.getCurrentTime()
             }
@@ -929,8 +929,8 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                 audioAsset.pause()
             }
 
-            // Update notification when paused (include elapsed time so progress bar shows correct position)
-            if self.showNotification {
+            // Fade-out: `recordPausePositionAfterFade` updates Now Playing when fade-to-pause completes.
+            if self.showNotification && !fadeOut {
                 self.updatePlaybackState(isPlaying: false, elapsedTime: audioAsset.getCurrentTime(), duration: audioAsset.getDuration())
             }
 
@@ -1463,6 +1463,19 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     private func clearNowPlayingInfo() {
         DispatchQueue.main.async {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        }
+    }
+
+    /// Persists `timeBeforePause` and refreshes Now Playing after fade-out-to-pause completes.
+    internal func recordPausePositionAfterFade(assetId: String, elapsedTime: TimeInterval, duration: TimeInterval) {
+        audioQueue.async { [weak self] in
+            guard let self else { return }
+            var data = self.audioAssetData[assetId] ?? [:]
+            data["timeBeforePause"] = elapsedTime
+            self.audioAssetData[assetId] = data
+            if self.showNotification && self.currentlyPlayingAssetId == assetId {
+                self.updatePlaybackState(isPlaying: false, elapsedTime: elapsedTime, duration: duration)
+            }
         }
     }
 

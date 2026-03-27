@@ -172,6 +172,30 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
         }
     }
 
+    /// Must be called on `audioQueue`. If `timeBeforePause` is stored, clears it and seeks (async for remote) before running `resume` + Now Playing refresh.
+    private func resumeAssetFromStoredPausePositionIfNeeded(assetId: String, asset: AudioAsset) {
+        var restoredTime: TimeInterval?
+        if var data = audioAssetData[assetId],
+           let time = data["timeBeforePause"] as? TimeInterval {
+            restoredTime = time
+            data.removeValue(forKey: "timeBeforePause")
+            audioAssetData[assetId] = data
+        }
+        let resumeAndRefreshNowPlaying: () -> Void = { [weak self] in
+            guard let self else { return }
+            asset.resume()
+            updateNowPlayingInfo(audioId: assetId, audioAsset: asset)
+        }
+        if let t = restoredTime {
+            asset.setCurrentTime(time: t) { [weak self] in
+                guard let self else { return }
+                audioQueue.async(flags: .barrier, execute: resumeAndRefreshNowPlaying)
+            }
+        } else {
+            resumeAndRefreshNowPlaying()
+        }
+    }
+
     // swiftlint:disable function_body_length
     private func setupRemoteCommandCenter() {
         let commandCenter = MPRemoteCommandCenter.shared()
@@ -188,26 +212,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                 }
 
                 if !asset.isPlaying() {
-                    var restoredTime: TimeInterval?
-                    if var data = self.audioAssetData[assetId],
-                       let time = data["timeBeforePause"] as? TimeInterval {
-                        restoredTime = time
-                        data.removeValue(forKey: "timeBeforePause")
-                        self.audioAssetData[assetId] = data
-                    }
-                    let resumeAfterSeek: () -> Void = { [weak self] in
-                        guard let self else { return }
-                        asset.resume()
-                        self.updateNowPlayingInfo(audioId: assetId, audioAsset: asset)
-                    }
-                    if let t = restoredTime {
-                        asset.setCurrentTime(time: t) { [weak self] in
-                            guard let self else { return }
-                            self.audioQueue.async(flags: .barrier, execute: resumeAfterSeek)
-                        }
-                    } else {
-                        resumeAfterSeek()
-                    }
+                    self.resumeAssetFromStoredPausePositionIfNeeded(assetId: assetId, asset: asset)
                 }
             }
             return .success
@@ -274,26 +279,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
                     asset.pause()
                     self.updatePlaybackState(isPlaying: false, elapsedTime: timeBeforePause, duration: asset.getDuration())
                 } else {
-                    var restoredTime: TimeInterval?
-                    if var data = self.audioAssetData[assetId],
-                       let time = data["timeBeforePause"] as? TimeInterval {
-                        restoredTime = time
-                        data.removeValue(forKey: "timeBeforePause")
-                        self.audioAssetData[assetId] = data
-                    }
-                    let resumeAfterSeek: () -> Void = { [weak self] in
-                        guard let self else { return }
-                        asset.resume()
-                        self.updateNowPlayingInfo(audioId: assetId, audioAsset: asset)
-                    }
-                    if let t = restoredTime {
-                        asset.setCurrentTime(time: t) { [weak self] in
-                            guard let self else { return }
-                            self.audioQueue.async(flags: .barrier, execute: resumeAfterSeek)
-                        }
-                    } else {
-                        resumeAfterSeek()
-                    }
+                    self.resumeAssetFromStoredPausePositionIfNeeded(assetId: assetId, asset: asset)
                 }
             }
             return .success

@@ -15,6 +15,32 @@ extension AudioAsset {
         fadeTask = nil
     }
 
+    fileprivate func performLocalFadeOutPauseOnMain(audio: AVAudioPlayer, beforePause: ((TimeInterval, TimeInterval) -> Void)?) {
+        let elapsed = audio.currentTime
+        let duration = audio.duration.isFinite ? audio.duration : 0
+        beforePause?(elapsed, duration)
+        audio.pause()
+    }
+
+    fileprivate func scheduleLocalFadeOutPauseOnMain(audio: AVAudioPlayer, beforePause: ((TimeInterval, TimeInterval) -> Void)?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.performLocalFadeOutPauseOnMain(audio: audio, beforePause: beforePause)
+        }
+    }
+
+    fileprivate func scheduleLocalFadeOutStopOnMain(audio: AVAudioPlayer) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.performLocalFadeOutStopOnMain(audio: audio)
+        }
+    }
+
+    fileprivate func performLocalFadeOutStopOnMain(audio: AVAudioPlayer) {
+        audio.stop()
+        dispatchComplete()
+    }
+
     func fadeIn(audio: AVAudioPlayer, fadeInDuration: TimeInterval, targetVolume: Float) {
         cancelFade()
         let steps = Int(fadeInDuration / TimeInterval(fadeDelaySecs))
@@ -52,18 +78,9 @@ extension AudioAsset {
         let steps = Int(fadeOutDuration / TimeInterval(fadeDelaySecs))
         guard steps > 0 else {
             if toPause {
-                DispatchQueue.main.async {
-                    let elapsed = audio.currentTime
-                    let duration = audio.duration.isFinite ? audio.duration : 0
-                    beforePause?(elapsed, duration)
-                    audio.pause()
-                }
+                scheduleLocalFadeOutPauseOnMain(audio: audio, beforePause: beforePause)
             } else {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
-                    audio.stop()
-                    self.dispatchComplete()
-                }
+                scheduleLocalFadeOutStopOnMain(audio: audio)
             }
             return
         }
@@ -84,13 +101,9 @@ extension AudioAsset {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 if toPause {
-                    let elapsed = audio.currentTime
-                    let duration = audio.duration.isFinite ? audio.duration : 0
-                    beforePause?(elapsed, duration)
-                    audio.pause()
+                    self.performLocalFadeOutPauseOnMain(audio: audio, beforePause: beforePause)
                 } else {
-                    audio.stop()
-                    self.dispatchComplete()
+                    self.performLocalFadeOutStopOnMain(audio: audio)
                 }
             }
         }

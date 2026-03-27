@@ -2,6 +2,33 @@ import AVFoundation
 
 extension RemoteAudioAsset {
 
+    /// Pause after sampling elapsed/duration for Now Playing. Caller must be on the main queue.
+    fileprivate func performRemoteFadeOutPauseOnMain(player: AVPlayer, beforePause: ((TimeInterval, TimeInterval) -> Void)?) {
+        let elapsed = player.currentTime().seconds
+        let rawDuration = player.currentItem?.duration ?? .zero
+        let duration = rawDuration.isNumeric && rawDuration.isValid ? rawDuration.seconds : 0
+        beforePause?(elapsed, duration.isFinite ? duration : 0)
+        player.pause()
+    }
+
+    fileprivate func scheduleRemoteFadeOutPauseOnMain(player: AVPlayer, beforePause: ((TimeInterval, TimeInterval) -> Void)?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.performRemoteFadeOutPauseOnMain(player: player, beforePause: beforePause)
+        }
+    }
+
+    /// Pause, seek to start, then emit `complete` on the main queue after the seek finishes.
+    fileprivate func pauseSeekToStartThenDispatchComplete(on player: AVPlayer) {
+        player.pause()
+        player.seek(to: .zero) { [weak self] _ in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                self.dispatchComplete()
+            }
+        }
+    }
+
     func fadeIn(player: AVPlayer, fadeInDuration: TimeInterval, targetVolume: Float) {
         cancelFade()
         let steps = Int(fadeInDuration / TimeInterval(fadeDelaySecs))
@@ -38,23 +65,11 @@ extension RemoteAudioAsset {
         let steps = Int(fadeOutDuration / TimeInterval(fadeDelaySecs))
         guard steps > 0 else {
             if toPause {
-                DispatchQueue.main.async {
-                    let elapsed = player.currentTime().seconds
-                    let rawDuration = player.currentItem?.duration ?? .zero
-                    let duration = rawDuration.isNumeric && rawDuration.isValid ? rawDuration.seconds : 0
-                    beforePause?(elapsed, duration.isFinite ? duration : 0)
-                    player.pause()
-                }
+                scheduleRemoteFadeOutPauseOnMain(player: player, beforePause: beforePause)
             } else {
                 DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
-                    player.pause()
-                    player.seek(to: .zero) { [weak self] _ in
-                        guard let self else { return }
-                        DispatchQueue.main.async {
-                            self.dispatchComplete()
-                        }
-                    }
+                    self.pauseSeekToStartThenDispatchComplete(on: player)
                 }
             }
             return
@@ -76,19 +91,9 @@ extension RemoteAudioAsset {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 if toPause {
-                    let elapsed = player.currentTime().seconds
-                    let rawDuration = player.currentItem?.duration ?? .zero
-                    let duration = rawDuration.isNumeric && rawDuration.isValid ? rawDuration.seconds : 0
-                    beforePause?(elapsed, duration.isFinite ? duration : 0)
-                    player.pause()
+                    self.performRemoteFadeOutPauseOnMain(player: player, beforePause: beforePause)
                 } else {
-                    player.pause()
-                    player.seek(to: .zero) { [weak self] _ in
-                        guard let self else { return }
-                        DispatchQueue.main.async {
-                            self.dispatchComplete()
-                        }
-                    }
+                    self.pauseSeekToStartThenDispatchComplete(on: player)
                 }
             }
         }

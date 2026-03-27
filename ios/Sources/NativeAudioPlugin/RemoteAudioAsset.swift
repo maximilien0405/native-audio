@@ -132,6 +132,15 @@ public class RemoteAudioAsset: AudioAsset {
         }
     }
 
+    override func setCurrentTime(time: TimeInterval) {
+        owner?.executeOnAudioQueue { [weak self] in
+            guard let self else { return }
+            guard !players.isEmpty && playIndex < players.count else { return }
+            let validTime = max(time, 0)
+            players[playIndex].seek(to: CMTimeMakeWithSeconds(validTime, preferredTimescale: 1))
+        }
+    }
+
     override func resume() {
         owner?.executeOnAudioQueue { [weak self] in
             guard let self else { return }

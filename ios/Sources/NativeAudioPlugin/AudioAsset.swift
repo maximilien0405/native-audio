@@ -213,8 +213,7 @@ public class AudioAsset: NSObject, AVAudioPlayerDelegate {
             guard let self else { return }
             guard !channels.isEmpty, playIndex < channels.count else { return }
             let player = channels[playIndex]
-            let timeOffset = player.deviceCurrentTime + 0.01
-            player.play(atTime: timeOffset)
+            player.play()
             startCurrentTimeUpdates()
         }
     }

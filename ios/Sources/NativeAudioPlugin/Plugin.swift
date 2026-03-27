@@ -173,6 +173,7 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
     }
 
     /// Must be called on `audioQueue`. If `timeBeforePause` is stored, clears it and seeks (async for remote) before running `resume` + Now Playing refresh.
+    /// Mirrors `resume(_:)` (non–fade-in path): restores `volumeBeforePause` via `setVolume`, clears that key from `audioAssetData`, then `resume()`.
     private func resumeAssetFromStoredPausePositionIfNeeded(assetId: String, asset: AudioAsset) {
         var restoredTime: TimeInterval?
         if var data = audioAssetData[assetId],
@@ -181,8 +182,21 @@ public class NativeAudio: CAPPlugin, AVAudioPlayerDelegate, CAPBridgedPlugin {
             data.removeValue(forKey: "timeBeforePause")
             audioAssetData[assetId] = data
         }
+
+        var restoredVolume: Float?
+        if let data = audioAssetData[assetId], let volume = data["volumeBeforePause"] as? Float {
+            restoredVolume = volume
+        }
+
         let resumeAndRefreshNowPlaying: () -> Void = { [weak self] in
             guard let self else { return }
+            if let volume = restoredVolume {
+                asset.setVolume(volume: NSNumber(value: volume), fadeDuration: 0)
+            }
+            if var data = self.audioAssetData[assetId] {
+                data.removeValue(forKey: "volumeBeforePause")
+                self.audioAssetData[assetId] = data
+            }
             asset.resume()
             updateNowPlayingInfo(audioId: assetId, audioAsset: asset)
         }

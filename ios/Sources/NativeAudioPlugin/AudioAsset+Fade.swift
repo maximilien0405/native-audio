@@ -29,6 +29,11 @@ extension AudioAsset {
         }
     }
 
+    /// Same main-thread pause and `beforePause(elapsed, duration)` as fade-out-to-pause when no fade runs (e.g. volume already zero).
+    internal func schedulePauseWithPositionRecording(audio: AVAudioPlayer, beforePause: ((TimeInterval, TimeInterval) -> Void)?) {
+        scheduleLocalFadeOutPauseOnMain(audio: audio, beforePause: beforePause)
+    }
+
     fileprivate func scheduleLocalFadeOutStopOnMain(audio: AVAudioPlayer) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
